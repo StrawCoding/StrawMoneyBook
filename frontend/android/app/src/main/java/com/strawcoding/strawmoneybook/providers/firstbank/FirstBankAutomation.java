@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -274,7 +275,7 @@ public final class FirstBankAutomation {
                     loadDetails.put("windowStart", window.startDateBank);
                     loadDetails.put("windowEnd", window.endDateBank);
                     debugTrace.record("load_transaction_page", "running", "Loading transaction page", loadDetails);
-                    session.loadTransactionPage(accountId);
+                    session.loadTransactionPage(accountId, window.startDateBank, window.endDateBank);
                     if (session.isLoginPage()) {
                         if (reloginAttempted) {
                             throw new BankAutomationException("first_bank_session_expired", "First Bank session expired and silent relogin failed");
@@ -682,6 +683,25 @@ public final class FirstBankAutomation {
             );
             if (fromIntercept.length() > 0) {
                 return;
+            }
+            if (session.tryHttpTransactionQuery(queryAccountId, startDateBank, endDateBank)) {
+                try {
+                    Thread.sleep(2_000L);
+                } catch (InterruptedException error) {
+                    Thread.currentThread().interrupt();
+                }
+                if (session.waitForTransactionTable()) {
+                    return;
+                }
+                JSONArray retryIntercept = parseTransactionsFromInterceptedJson(
+                    session.getTransactionInterceptPayloads(),
+                    queryAccountId,
+                    startDateBank,
+                    endDateBank
+                );
+                if (retryIntercept.length() > 0) {
+                    return;
+                }
             }
             JSONObject probe = session.probeTransactionQueryFailure();
             Log.i(TAG, "transaction_query_timeout probe=" + probe.toString()
@@ -1482,6 +1502,32 @@ public final class FirstBankAutomation {
             || (lower.contains("vrfycode") && lower.contains("login"));
     }
 
+    static String stripUrlQuery(String url) {
+        String normalized = normalizeText(url);
+        int queryIndex = normalized.indexOf('?');
+        if (queryIndex > 0) {
+            return normalized.substring(0, queryIndex);
+        }
+        return normalized;
+    }
+
+    static void mergeActionQueryIntoParams(String actionUrl, JSONObject params) throws JSONException {
+        String normalized = normalizeText(actionUrl);
+        int queryIndex = normalized.indexOf('?');
+        if (queryIndex < 0 || queryIndex >= normalized.length() - 1) {
+            return;
+        }
+        String query = normalized.substring(queryIndex + 1);
+        for (String pair : query.split("&")) {
+            if (pair.isEmpty()) continue;
+            String[] parts = pair.split("=", 2);
+            String key = URLDecoder.decode(parts[0], StandardCharsets.UTF_8);
+            if (key.isEmpty()) continue;
+            String value = parts.length > 1 ? URLDecoder.decode(parts[1], StandardCharsets.UTF_8) : "";
+            params.put(key, value);
+        }
+    }
+
     static String buildDirectTransactionQueryUrl(String accountId, String startDateBank, String endDateBank) {
         String normalizedAccount = normalizeDigits(accountId);
         String start = normalizeText(startDateBank);
@@ -1529,14 +1575,20 @@ public final class FirstBankAutomation {
         return normalizeText(endDateBank);
     }
 
+    static boolean looksLikeFirstBankNoDataHtml(String body) {
+        String normalized = normalizeText(body);
+        return Pattern.compile(
+            "查無資料|沒有資料|查無交易|Information not found|no transaction record",
+            Pattern.CASE_INSENSITIVE
+        ).matcher(normalized).find();
+    }
+
     static boolean looksLikeTransactionResultHtml(String body) {
         String normalized = normalizeText(body);
         if (normalized.length() < 80) {
             return false;
         }
-        if (Pattern.compile("查無資料|沒有資料|no transaction record|no data to display|查無交易|0\\s*筆", Pattern.CASE_INSENSITIVE)
-            .matcher(normalized)
-            .find()) {
+        if (looksLikeFirstBankNoDataHtml(normalized)) {
             return true;
         }
         String lower = normalized.toLowerCase(Locale.US);
@@ -1622,9 +1674,16 @@ public final class FirstBankAutomation {
                   params.acnt = accountId;
                   if (Object.prototype.hasOwnProperty.call(params, 'ACNT')) params.ACNT = accountId;
                 }
+                const enquiryButton = Array.from(doc.querySelectorAll('input[type="button"], input[type="submit"], button')).find((button) => {
+                  const label = String(button.value ?? button.textContent ?? '').trim();
+                  return /查詢|^Enquiry$|query|enquiry|search/i.test(label);
+                });
+                if (enquiryButton && enquiryButton.name) {
+                  params[String(enquiryButton.name)] = String(enquiryButton.value ?? '');
+                }
                 const form = startInput.closest('form') || doc.querySelector('form');
                 const action = form && form.action ? form.action : String(win.location?.href || doc.URL || '');
-                const method = form && form.method ? String(form.method).toUpperCase() : 'POST';
+                const method = form && form.method ? String(form.method).toUpperCase() : 'GET';
                 return {
                   ok: true,
                   action,
@@ -1759,9 +1818,7 @@ public final class FirstBankAutomation {
         if (!looksLikeTransactionResultHtml(html)) {
             return items;
         }
-        if (Pattern.compile("查無資料|沒有資料|no transaction record|no data to display|查無交易|0\\s*筆", Pattern.CASE_INSENSITIVE)
-            .matcher(html)
-            .find()) {
+        if (looksLikeFirstBankNoDataHtml(html)) {
             return items;
         }
         Pattern rowPattern = Pattern.compile("<tr\\b[^>]*>([\\s\\S]*?)</tr>", Pattern.CASE_INSENSITIVE);
@@ -3295,13 +3352,15 @@ public final class FirstBankAutomation {
               function syncHiddenDateFields(doc, startDate, endDate) {
                 const startDigits = String(startDate ?? '').replace(/\\D/g, '');
                 const endDigits = String(endDate ?? '').replace(/\\D/g, '');
-                for (const input of Array.from(doc.querySelectorAll('input[type="hidden"]'))) {
+                for (const input of Array.from(doc.querySelectorAll('input'))) {
                   const key = `${input.id || ''} ${input.name || ''}`.toLowerCase();
-                  if (/txnstart|startdate|sdate|qrys|inqs/.test(key) && startDigits) {
-                    input.value = startDigits;
+                  if (/txnstart|startdate|sdate|qrys|inqs/.test(key)) {
+                    input.value = /txnstart/.test(key) ? String(startDate ?? '') : (startDigits || String(startDate ?? ''));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
                   }
-                  if (/txnend|enddate|edate|qrye|inqe/.test(key) && endDigits) {
-                    input.value = endDigits;
+                  if (/txnend|enddate|edate|qrye|inqe/.test(key)) {
+                    input.value = /txnend/.test(key) ? String(endDate ?? '') : (endDigits || String(endDate ?? ''));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
                   }
                 }
               }
@@ -3406,31 +3465,158 @@ public final class FirstBankAutomation {
                 }
                 syncHiddenDateFields(entry.doc, startCandidates[0] ?? startDate, endCandidates[0] ?? endDate);
                 const view = entry.win || entry.doc.defaultView || window;
+                const form1 = entry.doc.form1 || entry.doc.querySelector('form[name="form1"]') || startInput.closest('form');
+                const dateTargetStart = (form1 && form1.txnStart) ? form1.txnStart : startInput;
+                const dateTargetEnd = (form1 && form1.txnEnd) ? form1.txnEnd : endInput;
+                let dateStartOk = false;
+                let dateEndOk = false;
+                let scopeOk = false;
+                let chosenStart = startCandidates[0] ?? startDate;
+                let chosenEnd = endCandidates[0] ?? endDate;
+                for (let index = 0; index < startCandidates.length; index += 1) {
+                  chosenStart = startCandidates[index] ?? startDate;
+                  chosenEnd = endCandidates[index] ?? endDate;
+                  setDateInput(dateTargetStart, chosenStart);
+                  setDateInput(dateTargetEnd, chosenEnd);
+                  applyDatePickers(entry.win, dateTargetStart, dateTargetEnd, chosenStart, chosenEnd);
+                  if (form1 && form1.txnStart) form1.txnStart.value = chosenStart;
+                  if (form1 && form1.txnEnd) form1.txnEnd.value = chosenEnd;
+                  dateStartOk = typeof view.dateCheck === 'function' ? Boolean(view.dateCheck(dateTargetStart)) : true;
+                  dateEndOk = typeof view.dateCheck === 'function' ? Boolean(view.dateCheck(dateTargetEnd)) : true;
+                  scopeOk = typeof view.checkdatescope === 'function'
+                    ? Boolean(view.checkdatescope(String(dateTargetStart.value ?? ''), String(dateTargetEnd.value ?? ''), 'Starting and Ending Dates of Enquiry'))
+                    : true;
+                  if (dateStartOk && dateEndOk && scopeOk) break;
+                }
                 const frameUrl = String((entry.win && entry.win.location && entry.win.location.href) || entry.doc.URL || '');
                 let method = 'dates-only';
-                if (/010103|0103/.test(frameUrl) && view && typeof view.contract === 'function') {
+                if (dateStartOk && dateEndOk && scopeOk && typeof view.contract === 'function') {
+                  try { view.oneclick = true; } catch (_error) {}
                   view.contract();
                   method = 'contract';
                 } else {
-                  const queryButton = Array.from(entry.doc.querySelectorAll('input[type="button"],button,input[type="submit"],a'))
-                    .find((button) => /查詢|^Enquiry$|query|enquiry|search|submit/i.test(String(button.value ?? button.textContent ?? '').trim()));
+                  const queryButton = Array.from(entry.doc.querySelectorAll('input[type="button"], button, input[type="submit"], a'))
+                    .find((button) => /查詢|^Enquiry$|query|enquiry|search/i.test(String(button.value ?? button.textContent ?? '').trim()));
                   if (queryButton && typeof queryButton.click === 'function') {
                     queryButton.click();
                     method = 'button';
-                  } else if (view && typeof view.contract === 'function') {
+                  } else if (typeof view.contract === 'function') {
+                    try { view.oneclick = true; } catch (_error) {}
                     view.contract();
-                    method = 'contract';
+                    method = 'contract-forced';
+                  } else if (form1 && typeof form1.submit === 'function') {
+                    form1.action = '010103.html';
+                    form1.submit();
+                    method = 'form-submit';
                   }
                 }
                 return {
                   ok: true,
                   method,
-                  start: String(startInput.value ?? ''),
-                  end: String(endInput.value ?? ''),
+                  start: String(dateTargetStart.value ?? ''),
+                  end: String(dateTargetEnd.value ?? ''),
                   accountSelected,
+                  dateStartOk,
+                  dateEndOk,
+                  scopeOk,
                 };
               }
               return { ok: false };
+            })();
+            """, quoteJs(accountId), quoteJs(startDateBank), quoteJs(endDateBank));
+    }
+
+    static String buildValidatedForm1SubmitScript(String accountId, String startDateBank, String endDateBank) {
+        return String.format(Locale.US, """
+            (() => {
+              const accountId = %s;
+              const startDate = %s;
+              const endDate = %s;
+              function digits(value) { return String(value ?? '').replace(/\\D/g, ''); }
+              function toRocDate(value) {
+                const match = String(value ?? '').match(/(\\d{4})\\/(\\d{1,2})\\/(\\d{1,2})/);
+                if (!match) return String(value ?? '');
+                const rocYear = Number(match[1]) - 1911;
+                return `${String(rocYear).padStart(3, '0')}/${String(Number(match[2])).padStart(2, '0')}/${String(Number(match[3])).padStart(2, '0')}`;
+              }
+              function parseYmd(value) {
+                const match = String(value ?? '').match(/(\\d{4})\\/(\\d{1,2})\\/(\\d{1,2})/);
+                if (!match) return null;
+                return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+              }
+              function pickViaDatepicker(jq, input, ymd) {
+                const parts = parseYmd(ymd);
+                if (!parts || !jq?.fn?.datepicker || !input) return;
+                try {
+                  if (!jq(input).data('datepicker')) jq(input).datepicker({ dateFormat: 'yy/mm/dd' });
+                  jq(input).datepicker('setDate', new Date(parts.year, parts.month - 1, parts.day));
+                  jq(input).trigger('change');
+                } catch (_error) {}
+              }
+              function collectEntries() {
+                const entries = [];
+                const seen = new Set();
+                function visit(win) {
+                  if (!win || seen.has(win)) return;
+                  seen.add(win);
+                  try {
+                    if (win.document) entries.push({ win, doc: win.document });
+                    for (let index = 0; index < win.frames.length; index += 1) visit(win.frames[index]);
+                  } catch (_error) {}
+                }
+                visit(window);
+                return entries;
+              }
+              for (const entry of collectEntries()) {
+                const form1 = entry.doc.form1 || entry.doc.querySelector('form[name="form1"]');
+                const startInput = form1?.txnStart || entry.doc.querySelector('#txnStart, input[name="txnStart"]');
+                const endInput = form1?.txnEnd || entry.doc.querySelector('#txnEnd, input[name="txnEnd"]');
+                if (!startInput || !endInput) continue;
+                const targetAcnt = digits(accountId);
+                if (targetAcnt) {
+                  for (const input of Array.from(entry.doc.querySelectorAll('input'))) {
+                    const key = `${input.name || ''} ${input.id || ''}`.toLowerCase();
+                    if (!/acnt|account/.test(key)) continue;
+                    input.value = targetAcnt;
+                  }
+                }
+                const jq = entry.win.jQuery || entry.win.$;
+                const startCandidates = [startDate, toRocDate(startDate)];
+                const endCandidates = [endDate, toRocDate(endDate)];
+                let dateStartOk = false;
+                let dateEndOk = false;
+                let scopeOk = false;
+                for (let index = 0; index < startCandidates.length; index += 1) {
+                  const candidateStart = startCandidates[index];
+                  const candidateEnd = endCandidates[index];
+                  startInput.value = candidateStart;
+                  endInput.value = candidateEnd;
+                  if (form1?.txnStart) form1.txnStart.value = candidateStart;
+                  if (form1?.txnEnd) form1.txnEnd.value = candidateEnd;
+                  pickViaDatepicker(jq, startInput, candidateStart);
+                  pickViaDatepicker(jq, endInput, candidateEnd);
+                  dateStartOk = typeof entry.win.dateCheck === 'function' ? Boolean(entry.win.dateCheck(startInput)) : true;
+                  dateEndOk = typeof entry.win.dateCheck === 'function' ? Boolean(entry.win.dateCheck(endInput)) : true;
+                  scopeOk = typeof entry.win.checkdatescope === 'function'
+                    ? Boolean(entry.win.checkdatescope(String(startInput.value ?? ''), String(endInput.value ?? ''), 'Starting and Ending Dates of Enquiry'))
+                    : true;
+                  if (dateStartOk && dateEndOk && scopeOk) break;
+                }
+                if (!(dateStartOk && dateEndOk && scopeOk)) {
+                  return { ok: false, dateStartOk, dateEndOk, scopeOk, submitted: false };
+                }
+                try { entry.win.oneclick = true; } catch (_error) {}
+                if (typeof entry.win.contract === 'function') {
+                  entry.win.contract();
+                  return { ok: true, submitted: true, method: 'contract', start: String(startInput.value ?? ''), end: String(endInput.value ?? ''), dateStartOk, dateEndOk, scopeOk };
+                }
+                if (form1) {
+                  form1.action = '010103.html';
+                  form1.submit();
+                  return { ok: true, submitted: true, method: 'form-submit', start: String(startInput.value ?? ''), end: String(endInput.value ?? ''), dateStartOk, dateEndOk, scopeOk };
+                }
+              }
+              return { ok: false, submitted: false };
             })();
             """, quoteJs(accountId), quoteJs(startDateBank), quoteJs(endDateBank));
     }
@@ -4374,14 +4560,39 @@ public final class FirstBankAutomation {
             return activeTransactionAccountId;
         }
 
-        void loadTransactionPage(String accountId) throws Exception {
+        void loadTransactionPage(String accountId, String startDateBank, String endDateBank) throws Exception {
             activeTransactionAccountId = normalizeDigits(accountId);
-            String query = activeTransactionAccountId.isEmpty() ? "" : "?acnt=" + activeTransactionAccountId;
-            loadUrl(TXN_URL + query);
+            String pageUrl = buildDirectTransactionQueryUrl(
+                activeTransactionAccountId,
+                normalizeText(startDateBank),
+                normalizeText(endDateBank)
+            );
+            loadUrl(pageUrl);
             waitForTransactionQueryFormReady();
             Object probe = evaluateJavaScript(buildTransactionFormFieldProbeScript());
             if (probe != null) {
                 Log.i(TAG, "transaction_form_fields " + String.valueOf(probe));
+            }
+            Object contractProbe = evaluateJavaScript("""
+                (() => {
+                  function visit(win) {
+                    if (!win) return null;
+                    try {
+                      if (typeof win.contract === 'function') {
+                        return { hasContract: true, source: String(win.contract).slice(0, 1200) };
+                      }
+                      for (let index = 0; index < win.frames.length; index += 1) {
+                        const nested = visit(win.frames[index]);
+                        if (nested) return nested;
+                      }
+                    } catch (_error) {}
+                    return null;
+                  }
+                  return visit(window) ?? { hasContract: false };
+                })();
+                """);
+            if (contractProbe != null) {
+                Log.i(TAG, "transaction_contract_probe " + String.valueOf(contractProbe));
             }
         }
 
@@ -4404,13 +4615,23 @@ public final class FirstBankAutomation {
         }
 
         boolean tryHttpTransactionQuery(String accountId, String startDateBank, String endDateBank) throws Exception {
+            if (submitValidatedForm1ViaJavaScript(accountId, startDateBank, endDateBank)) {
+                return true;
+            }
             String referer = TXN_URL + (normalizeDigits(accountId).isEmpty() ? "" : "?acnt=" + normalizeDigits(accountId));
             for (String variantKey : new String[] { "primary", "digits", "roc" }) {
                 String variantStart = formatTransactionDateVariant(startDateBank, endDateBank, variantKey);
                 String variantEnd = formatTransactionEndDateVariant(startDateBank, endDateBank, variantKey);
                 String directUrl = buildDirectTransactionQueryUrl(accountId, variantStart, variantEnd);
                 String directHtml = executeTransactionHttpRequest(directUrl, referer, "GET", new JSONObject());
-                if (applyTransactionHttpHtml(directUrl, directHtml, "transaction_http_direct variant=" + variantKey)) {
+                if (applyTransactionHttpHtml(
+                    directUrl,
+                    directHtml,
+                    "transaction_http_direct variant=" + variantKey,
+                    accountId,
+                    startDateBank,
+                    endDateBank
+                )) {
                     return true;
                 }
             }
@@ -4423,6 +4644,9 @@ public final class FirstBankAutomation {
             if (!form.optBoolean("ok", false)) {
                 return false;
             }
+            Log.i(TAG, "transaction_http_form_extract method=" + form.optString("method")
+                + " action=" + form.optString("action")
+                + " paramCount=" + (form.optJSONObject("params") == null ? 0 : form.optJSONObject("params").length()));
             String action = normalizeText(form.optString("action"));
             String pageUrl = normalizeText(form.optString("pageUrl"));
             if (action.isEmpty()) {
@@ -4442,21 +4666,174 @@ public final class FirstBankAutomation {
             for (String variantKey : new String[] { "primary", "digits", "roc" }) {
                 JSONObject attemptParams = new JSONObject(params.toString());
                 applyTransactionDateVariant(attemptParams, startDateBank, endDateBank, variantKey);
-                String responseHtml = executeTransactionHttpRequest(action, pageUrl, method, attemptParams);
-                if (applyTransactionHttpHtml(pageUrl, responseHtml, "transaction_http_replay variant=" + variantKey)) {
+                mergeActionQueryIntoParams(action, attemptParams);
+                String postAction = stripUrlQuery(action);
+                String responseHtml = executeTransactionHttpRequest(
+                    postAction.isEmpty() ? action : postAction,
+                    pageUrl,
+                    method,
+                    attemptParams
+                );
+                if (applyTransactionHttpHtml(
+                    pageUrl,
+                    responseHtml,
+                    "transaction_http_replay variant=" + variantKey,
+                    accountId,
+                    startDateBank,
+                    endDateBank
+                )) {
+                    return true;
+                }
+                String webViewAction = stripUrlQuery(action);
+                if (webViewAction.isEmpty()) {
+                    webViewAction = action;
+                }
+                if (submitExtractedFormViaWebView(
+                    webViewAction,
+                    pageUrl,
+                    method,
+                    attemptParams,
+                    accountId,
+                    startDateBank,
+                    endDateBank,
+                    "transaction_webview_post variant=" + variantKey
+                )) {
+                    return true;
+                }
+                if (!"GET".equalsIgnoreCase(method)
+                    && submitExtractedFormViaWebView(
+                        webViewAction,
+                        pageUrl,
+                        "GET",
+                        attemptParams,
+                        accountId,
+                        startDateBank,
+                        endDateBank,
+                        "transaction_webview_get variant=" + variantKey
+                    )) {
                     return true;
                 }
             }
             return false;
         }
 
-        private boolean applyTransactionHttpHtml(String pageUrl, String responseHtml, String logLabel) throws Exception {
+        private boolean submitExtractedFormViaWebView(
+            String action,
+            String referer,
+            String method,
+            JSONObject params,
+            String accountId,
+            String startDateBank,
+            String endDateBank,
+            String logLabel
+        ) throws Exception {
+            String normalizedAction = normalizeText(action);
+            if (normalizedAction.isEmpty()) {
+                return false;
+            }
+            String normalizedMethod = normalizeText(method).toUpperCase(Locale.US);
+            if (normalizedMethod.isEmpty()) {
+                normalizedMethod = "POST";
+            }
+            if ("GET".equals(normalizedMethod)) {
+                String body = encodeFormUrlEncoded(params);
+                String requestUrl = normalizedAction + (normalizedAction.contains("?") ? "&" : "?") + body;
+                loadUrl(requestUrl);
+            } else {
+                CountDownLatch latch = new CountDownLatch(1);
+                navigationLatchRef.set(latch);
+                byte[] postBytes = encodeFormUrlEncoded(params).getBytes(StandardCharsets.UTF_8);
+                final byte[] payload = postBytes;
+                runOnUiThreadAndWait(() -> webView.postUrl(normalizedAction, payload));
+                waitForNavigation(normalizedAction, latch);
+            }
+            try {
+                Thread.sleep(3_000L);
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+            }
+            JSONArray rows = parseTransactionsFromDom(accountId, startDateBank, endDateBank);
+            Log.i(TAG, logLabel + " action=" + normalizedAction + " method=" + normalizedMethod + " domRows=" + rows.length());
+            return rows.length() > 0;
+        }
+
+        private boolean submitValidatedForm1ViaJavaScript(String accountId, String startDateBank, String endDateBank) throws Exception {
+            Object result = evaluateJavaScript(buildValidatedForm1SubmitScript(accountId, startDateBank, endDateBank));
+            if (!(result instanceof JSONObject)) {
+                return false;
+            }
+            JSONObject payload = (JSONObject) result;
+            Log.i(TAG, "transaction_form1_submit " + payload.toString());
+            if (!payload.optBoolean("ok", false) || !payload.optBoolean("submitted", false)) {
+                return false;
+            }
+            waitForTransactionTable();
+            Object tableProbe = evaluateJavaScript("""
+                (() => {
+                  function text(value) { return String(value ?? '').trim(); }
+                  function collectDocs() {
+                    const docs = [];
+                    const seen = new Set();
+                    function visit(win) {
+                      if (!win || seen.has(win)) return;
+                      seen.add(win);
+                      try {
+                        if (win.document) docs.push(win.document);
+                        for (let index = 0; index < win.frames.length; index += 1) visit(win.frames[index]);
+                      } catch (_error) {}
+                    }
+                    visit(window);
+                    return docs;
+                  }
+                  for (const doc of collectDocs()) {
+                    const table = doc.querySelector('table.CnbTable') || doc.querySelector('table');
+                    if (!table) continue;
+                    const rows = Array.from(table.querySelectorAll('tr')).map((row) => Array.from(row.querySelectorAll('th,td')).map((cell) => text(cell.textContent)));
+                    return {
+                      rowCount: rows.length,
+                      rows: rows.slice(0, 6),
+                      bodySample: text(doc.body?.innerText ?? '').slice(0, 900),
+                    };
+                  }
+                  return { rowCount: 0, rows: [], bodySample: '' };
+                })();
+                """);
+            Log.i(TAG, "transaction_form1_post_submit_probe " + String.valueOf(tableProbe));
+            JSONArray rows = parseTransactionsFromDom(accountId, startDateBank, endDateBank);
+            Log.i(TAG, "transaction_form1_submit domRows=" + rows.length());
+            if (rows.length() > 0) {
+                Log.i(TAG, "parse_transactions_sample " + rows.getJSONObject(0).toString());
+            }
+            return rows.length() > 0;
+        }
+
+        private JSONArray parseTransactionsFromDom(String accountId, String startDateBank, String endDateBank) throws Exception {
+            Object result = evaluateJavaScript(buildParseTransactionsScript(accountId, startDateBank, endDateBank));
+            if (result instanceof JSONArray) {
+                return (JSONArray) result;
+            }
+            return new JSONArray();
+        }
+
+        private boolean applyTransactionHttpHtml(
+            String pageUrl,
+            String responseHtml,
+            String logLabel,
+            String accountId,
+            String startDateBank,
+            String endDateBank
+        ) throws Exception {
             if (responseHtml.isEmpty() || looksLikeFirstBankLoginHtml(responseHtml)) {
                 return false;
             }
-            boolean looksResult = looksLikeTransactionResultHtml(responseHtml);
-            Log.i(TAG, logLabel + " bytes=" + responseHtml.length() + " looksLikeResult=" + looksResult);
-            if (!looksResult) {
+            JSONArray parsedRows = parseTransactionsFromHtmlPayload(responseHtml, accountId, startDateBank, endDateBank);
+            boolean noData = looksLikeFirstBankNoDataHtml(responseHtml);
+            boolean heuristicResult = looksLikeTransactionResultHtml(responseHtml);
+            Log.i(TAG, logLabel + " bytes=" + responseHtml.length()
+                + " parsedRows=" + parsedRows.length()
+                + " noData=" + noData
+                + " heuristicResult=" + heuristicResult);
+            if (parsedRows.length() == 0) {
                 return false;
             }
             loadHtmlDocument(pageUrl, responseHtml);

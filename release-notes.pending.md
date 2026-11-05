@@ -2,6 +2,9 @@
 
 ---
 
+## v1.6.21
+- 第一銀行 sync：對齊 `form1`／`contract()` 流程（`dateCheck`／`checkdatescope`／`oneclick` 後 `form1.submit`）；交易頁 URL 帶起迄日；HTTP／WebView POST 分離 action query；英文「Information not found」視為無資料；instrumented lookback 120 日。
+
 ## v1.6.19
 - 第一銀行 sync：對齊 Node 後端以 GET `010103.html?acnt&txnStart&txnEnd` 直查明細；表單 HTTP 重放預設 GET、精簡 POST 欄位；收緊結果 HTML 判斷（排除起迄摘要列）；intercept／重放 HTML 可解析 `CnbTable` 列。
 

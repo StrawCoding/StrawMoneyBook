@@ -27,6 +27,24 @@ public class FirstBankAutomationInterceptTest {
     }
 
     @Test
+    public void parsesEnglishTransactionTableHtml() throws Exception {
+        String sample = """
+            <table class="CnbTable">
+            <tr><th>Transaction Date</th><th>Transaction Type</th><th>Outgoing Amount</th><th>Incoming Amount</th><th>Balance</th></tr>
+            <tr><td>2026/11/01</td><td>Transfer</td><td></td><td>1,250</td><td>50,000</td></tr>
+            </table>
+            """;
+        var rows = FirstBankAutomation.parseTransactionsFromHtmlPayload(
+            sample,
+            "29168214193",
+            "2026/10/01",
+            "2026/11/06"
+        );
+        org.junit.Assert.assertEquals(1, rows.length());
+        org.junit.Assert.assertTrue(rows.getJSONObject(0).optLong("amountMinor") > 0);
+    }
+
+    @Test
     public void ignoresEnquirySummaryRowsWithoutAmounts() {
         String sample = "<table class=\"CnbTable\"><tr><td>Account Number</td><td>29168214193</td><td>Starting and Ending Dates</td><td>2026/10/20-2026/11/05</td></tr></table>";
         assertFalse(FirstBankAutomation.looksLikeTransactionResultHtml(sample));
