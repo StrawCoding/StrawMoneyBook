@@ -39,6 +39,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -54,6 +56,8 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class FirstBankAutomation {
     private static final String TAG = "FirstBankAutomation";
@@ -630,6 +634,25 @@ public final class FirstBankAutomation {
     private static void queryTransactions(BrowserSession session, String startDateBank, String endDateBank) throws Exception {
         session.clearTransactionInterceptBuffer();
         String queryAccountId = normalizeDigits(session.getActiveTransactionAccountId());
+        if (session.tryHttpTransactionQuery(queryAccountId, startDateBank, endDateBank)) {
+            try {
+                Thread.sleep(2_000L);
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+            }
+            if (session.waitForTransactionTable()) {
+                return;
+            }
+            JSONArray fromIntercept = parseTransactionsFromInterceptedJson(
+                session.getTransactionInterceptPayloads(),
+                queryAccountId,
+                startDateBank,
+                endDateBank
+            );
+            if (fromIntercept.length() > 0) {
+                return;
+            }
+        }
         boolean submitted = false;
         for (int attempt = 0; attempt < 3 && !submitted; attempt += 1) {
             session.waitForTransactionQueryFormReady();
@@ -1448,6 +1471,240 @@ public final class FirstBankAutomation {
         return first == '{' || first == '[';
     }
 
+    static boolean looksLikeFirstBankLoginHtml(String body) {
+        String lower = normalizeText(body).toLowerCase(Locale.US);
+        if (lower.length() < 40) {
+            return false;
+        }
+        return lower.contains("logincustidfake")
+            || lower.contains("usridinput")
+            || lower.contains("code_verify1")
+            || (lower.contains("vrfycode") && lower.contains("login"));
+    }
+
+    static String buildDirectTransactionQueryUrl(String accountId, String startDateBank, String endDateBank) {
+        String normalizedAccount = normalizeDigits(accountId);
+        String start = normalizeText(startDateBank);
+        String end = normalizeText(endDateBank);
+        StringBuilder url = new StringBuilder(TXN_URL);
+        url.append('?');
+        boolean hasQuery = false;
+        if (!normalizedAccount.isEmpty()) {
+            url.append("acnt=").append(URLEncoder.encode(normalizedAccount, StandardCharsets.UTF_8));
+            hasQuery = true;
+        }
+        if (!start.isEmpty()) {
+            if (hasQuery) {
+                url.append('&');
+            }
+            url.append("txnStart=").append(URLEncoder.encode(start, StandardCharsets.UTF_8));
+            hasQuery = true;
+        }
+        if (!end.isEmpty()) {
+            if (hasQuery) {
+                url.append('&');
+            }
+            url.append("txnEnd=").append(URLEncoder.encode(end, StandardCharsets.UTF_8));
+        }
+        return url.toString();
+    }
+
+    static String formatTransactionDateVariant(String startDateBank, String endDateBank, String variantKey) {
+        if ("digits".equals(variantKey)) {
+            return formatBankDateDigits(startDateBank);
+        }
+        if ("roc".equals(variantKey)) {
+            return formatBankDateRoc(startDateBank);
+        }
+        return normalizeText(startDateBank);
+    }
+
+    static String formatTransactionEndDateVariant(String startDateBank, String endDateBank, String variantKey) {
+        if ("digits".equals(variantKey)) {
+            return formatBankDateDigits(endDateBank);
+        }
+        if ("roc".equals(variantKey)) {
+            return formatBankDateRoc(endDateBank);
+        }
+        return normalizeText(endDateBank);
+    }
+
+    static boolean looksLikeTransactionResultHtml(String body) {
+        String normalized = normalizeText(body);
+        if (normalized.length() < 80) {
+            return false;
+        }
+        if (Pattern.compile("查無資料|沒有資料|no transaction record|no data to display|查無交易|0\\s*筆", Pattern.CASE_INSENSITIVE)
+            .matcher(normalized)
+            .find()) {
+            return true;
+        }
+        String lower = normalized.toLowerCase(Locale.US);
+        if (!lower.contains("cnbtable") && !lower.contains("<table")) {
+            return false;
+        }
+        Pattern rowPattern = Pattern.compile("<tr\\b[^>]*>([\\s\\S]*?)</tr>", Pattern.CASE_INSENSITIVE);
+        Pattern dateCell = Pattern.compile("\\d{1,2}/\\d{1,2}/\\d{2,4}|\\d{4}/\\d{1,2}/\\d{1,2}");
+        Pattern amountCell = Pattern.compile("\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?");
+        Matcher rowMatcher = rowPattern.matcher(normalized);
+        while (rowMatcher.find()) {
+            String row = rowMatcher.group(1);
+            String rowLower = row.toLowerCase(Locale.US);
+            if (rowLower.contains("account number")
+                || rowLower.contains("starting and ending")
+                || row.contains("帳號")
+                || row.contains("起迄")) {
+                continue;
+            }
+            if (!dateCell.matcher(row).find()) {
+                continue;
+            }
+            if (amountCell.matcher(row).find()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static String buildExtractTransactionFormScript(String accountId, String startDateBank, String endDateBank) {
+        return String.format(Locale.US, """
+            (() => {
+              const accountId = %s;
+              const startDate = %s;
+              const endDate = %s;
+              function digits(value) {
+                return String(value ?? '').replace(/\\D/g, '');
+              }
+              function toRocDate(value) {
+                const match = String(value ?? '').match(/(\\d{4})\\/(\\d{1,2})\\/(\\d{1,2})/);
+                if (!match) return String(value ?? '');
+                const rocYear = Number(match[1]) - 1911;
+                return `${String(rocYear).padStart(3, '0')}/${String(Number(match[2])).padStart(2, '0')}/${String(Number(match[3])).padStart(2, '0')}`;
+              }
+              function collectDocs() {
+                const docs = [];
+                const seen = new Set();
+                function visit(win) {
+                  if (!win || seen.has(win)) return;
+                  seen.add(win);
+                  try {
+                    if (win.document) docs.push({ doc: win.document, win });
+                    for (let index = 0; index < win.frames.length; index += 1) {
+                      visit(win.frames[index]);
+                    }
+                  } catch (_error) {}
+                }
+                visit(window);
+                return docs;
+              }
+              function buildParams(doc) {
+                const params = {};
+                const form = doc.querySelector('form');
+                const scope = form || doc;
+                for (const el of Array.from(scope.querySelectorAll('input, select, textarea'))) {
+                  const name = String(el.name || '').trim();
+                  if (!name) continue;
+                  const type = String(el.type || '').toLowerCase();
+                  if (type === 'button' || type === 'submit' || type === 'image' || type === 'reset') continue;
+                  if (el.disabled) continue;
+                  params[name] = String(el.value ?? '');
+                }
+                return params;
+              }
+              for (const { doc, win } of collectDocs()) {
+                const startInput = doc.querySelector('#txnStart, input[name*="txnStart"], input[id*="txnStart"]');
+                const endInput = doc.querySelector('#txnEnd, input[name*="txnEnd"], input[id*="txnEnd"]');
+                if (!startInput || !endInput) continue;
+                const params = buildParams(doc);
+                params.txnStart = startDate;
+                params.txnEnd = endDate;
+                if (accountId) {
+                  params.acnt = accountId;
+                  if (Object.prototype.hasOwnProperty.call(params, 'ACNT')) params.ACNT = accountId;
+                }
+                const form = startInput.closest('form') || doc.querySelector('form');
+                const action = form && form.action ? form.action : String(win.location?.href || doc.URL || '');
+                const method = form && form.method ? String(form.method).toUpperCase() : 'POST';
+                return {
+                  ok: true,
+                  action,
+                  method,
+                  pageUrl: String(win.location?.href || doc.URL || ''),
+                  params,
+                };
+              }
+              return { ok: false };
+            })();
+            """, quoteJs(accountId), quoteJs(startDateBank), quoteJs(endDateBank));
+    }
+
+    static String encodeFormUrlEncoded(JSONObject params) throws JSONException {
+        StringBuilder encoded = new StringBuilder();
+        JSONArray names = params.names();
+        if (names == null) {
+            return "";
+        }
+        for (int index = 0; index < names.length(); index += 1) {
+            String key = names.optString(index);
+            if (key.isEmpty()) continue;
+            String value = params.optString(key, "");
+            if (encoded.length() > 0) {
+                encoded.append('&');
+            }
+            encoded.append(URLEncoder.encode(key, StandardCharsets.UTF_8));
+            encoded.append('=');
+            encoded.append(URLEncoder.encode(value, StandardCharsets.UTF_8));
+        }
+        return encoded.toString();
+    }
+
+    private static String formatBankDateDigits(String startDateBank) {
+        return normalizeDigits(startDateBank);
+    }
+
+    private static String formatBankDateRoc(String startDateBank) {
+        LocalDate date = parseDate(startDateBank);
+        if (date == null) {
+            return normalizeText(startDateBank);
+        }
+        int rocYear = date.getYear() - 1911;
+        return String.format(Locale.US, "%03d/%02d/%02d", rocYear, date.getMonthValue(), date.getDayOfMonth());
+    }
+
+    private static void applyTransactionDateVariant(JSONObject params, String startDateBank, String endDateBank, String variantKey) throws JSONException {
+        if ("digits".equals(variantKey)) {
+            params.put("txnStart", formatBankDateDigits(startDateBank));
+            params.put("txnEnd", formatBankDateDigits(endDateBank));
+            return;
+        }
+        if ("roc".equals(variantKey)) {
+            params.put("txnStart", formatBankDateRoc(startDateBank));
+            params.put("txnEnd", formatBankDateRoc(endDateBank));
+            return;
+        }
+        params.put("txnStart", startDateBank);
+        params.put("txnEnd", endDateBank);
+    }
+
+    static String decodeBankHttpBody(byte[] body, String contentTypeHeader) {
+        if (body == null || body.length == 0) {
+            return "";
+        }
+        String contentType = normalizeText(contentTypeHeader).toLowerCase(Locale.US);
+        if (contentType.contains("big5") || contentType.contains("ms950")) {
+            return new String(body, Charset.forName("Big5"));
+        }
+        String utf8 = new String(body, StandardCharsets.UTF_8);
+        if (utf8.contains("第一") || utf8.contains("帳") || utf8.contains("CnbTable") || utf8.contains("Enquiry")) {
+            return utf8;
+        }
+        String big5 = new String(body, Charset.forName("Big5"));
+        if (big5.contains("第一") || big5.contains("帳") || big5.contains("CnbTable")) {
+            return big5;
+        }
+        return utf8;
+    }
+
     static boolean shouldReplayTransactionInterceptRequest(String method) {
         String normalized = normalizeText(method);
         if (normalized.isEmpty()) {
@@ -1463,18 +1720,19 @@ public final class FirstBankAutomation {
         }
         Set<String> seen = new LinkedHashSet<>();
         for (String payload : payloads) {
+            if (looksLikeTransactionResultHtml(payload) && !looksLikeTransactionJsonPayload(payload)) {
+                try {
+                    JSONArray items = parseTransactionsFromHtmlPayload(payload, accountId, startDateBank, endDateBank);
+                    appendUniqueTransactions(merged, seen, items);
+                } catch (JSONException error) {
+                    // Fall back to DOM parsing.
+                }
+                continue;
+            }
             if (!looksLikeTransactionJsonPayload(payload)) continue;
             try {
                 JSONArray items = parseTransactionJsonPayload(payload, accountId, startDateBank, endDateBank);
-                for (int index = 0; index < items.length(); index += 1) {
-                    JSONObject item = items.optJSONObject(index);
-                    if (item == null) continue;
-                    String key = normalizeText(item.optString("providerAccountId"))
-                        + ":" + normalizeText(item.optString("providerTransactionId"));
-                    if (key.equals(":") || seen.contains(key)) continue;
-                    seen.add(key);
-                    merged.put(item);
-                }
+                appendUniqueTransactions(merged, seen, items);
             } catch (Exception error) {
                 if (!normalizeText(error.getMessage()).isEmpty()) {
                     // Avoid android.util.Log in JVM unit tests; failures fall back to DOM parsing.
@@ -1482,6 +1740,99 @@ public final class FirstBankAutomation {
             }
         }
         return merged;
+    }
+
+    private static void appendUniqueTransactions(JSONArray merged, Set<String> seen, JSONArray items) throws JSONException {
+        for (int index = 0; index < items.length(); index += 1) {
+            JSONObject item = items.optJSONObject(index);
+            if (item == null) continue;
+            String key = normalizeText(item.optString("providerAccountId"))
+                + ":" + normalizeText(item.optString("providerTransactionId"));
+            if (key.equals(":") || seen.contains(key)) continue;
+            seen.add(key);
+            merged.put(item);
+        }
+    }
+
+    static JSONArray parseTransactionsFromHtmlPayload(String html, String accountId, String startDateBank, String endDateBank) {
+        JSONArray items = new JSONArray();
+        if (!looksLikeTransactionResultHtml(html)) {
+            return items;
+        }
+        if (Pattern.compile("查無資料|沒有資料|no transaction record|no data to display|查無交易|0\\s*筆", Pattern.CASE_INSENSITIVE)
+            .matcher(html)
+            .find()) {
+            return items;
+        }
+        Pattern rowPattern = Pattern.compile("<tr\\b[^>]*>([\\s\\S]*?)</tr>", Pattern.CASE_INSENSITIVE);
+        Pattern cellPattern = Pattern.compile("<t[hd]\\b[^>]*>([\\s\\S]*?)</t[hd]>", Pattern.CASE_INSENSITIVE);
+        Matcher rowMatcher = rowPattern.matcher(html);
+        while (rowMatcher.find()) {
+            String rowHtml = rowMatcher.group(1);
+            if (rowHtml.toLowerCase(Locale.US).contains("starting and ending") || rowHtml.contains("起迄")) {
+                continue;
+            }
+            List<String> cells = new ArrayList<>();
+            Matcher cellMatcher = cellPattern.matcher(rowHtml);
+            while (cellMatcher.find()) {
+                cells.add(stripHtmlTags(cellMatcher.group(1)));
+            }
+            if (cells.size() < 3) continue;
+            String postedAtText = "";
+            for (String cell : cells) {
+                if (Pattern.compile("\\d{1,2}/\\d{1,2}/\\d{2,4}|\\d{4}/\\d{1,2}/\\d{1,2}").matcher(cell).find()) {
+                    postedAtText = cell;
+                    break;
+                }
+            }
+            if (postedAtText.isEmpty()) continue;
+            long amountMinor = 0;
+            for (String cell : cells) {
+                long minor = parseAmountMinorFromCell(cell);
+                if (minor != 0) {
+                    amountMinor = minor;
+                    break;
+                }
+            }
+            if (amountMinor == 0) continue;
+            try {
+                JSONObject item = new JSONObject();
+                item.put("providerTransactionId", "fbtxn_" + Long.toString(Math.abs((accountId + "|" + cells).hashCode()), 36));
+                item.put("providerAccountId", accountId);
+                item.put("postedAt", parsePostedAtIso(postedAtText));
+                item.put("amountMinor", amountMinor);
+                item.put("currency", "TWD");
+                item.put("description", "First Bank transaction");
+                item.put("status", "posted");
+                JSONObject raw = new JSONObject();
+                raw.put("rangeStart", startDateBank);
+                raw.put("rangeEnd", endDateBank);
+                raw.put("cells", new JSONArray(cells));
+                item.put("rawJson", raw.toString());
+                if (!normalizeText(item.optString("postedAt")).isEmpty()) {
+                    items.put(item);
+                }
+            } catch (JSONException ignored) {
+            }
+        }
+        return items;
+    }
+
+    private static String stripHtmlTags(String value) {
+        return normalizeText(value.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " "));
+    }
+
+    private static long parseAmountMinorFromCell(String cell) {
+        String source = normalizeText(cell);
+        if (source.isEmpty() || !Pattern.compile("\\d{1,3}(?:,\\d{3})+").matcher(source).find()) {
+            return 0;
+        }
+        boolean negative = source.contains("(") || source.startsWith("-");
+        String numeric = source.replaceAll("[^0-9.]", "");
+        if (numeric.isEmpty()) return 0;
+        double amount = Double.parseDouble(numeric);
+        long minor = Math.round(amount * 100);
+        return negative ? -minor : minor;
     }
 
     static JSONArray parseTransactionJsonPayload(String payload, String accountId, String startDateBank, String endDateBank) throws JSONException {
@@ -3410,8 +3761,12 @@ public final class FirstBankAutomation {
             if (encoding == null || encoding.isEmpty()) {
                 encoding = "UTF-8";
             }
-            String payload = new String(body, StandardCharsets.UTF_8);
+            String payload = decodeBankHttpBody(body, mimeType);
             if (looksLikeTransactionJsonPayload(payload)) {
+                synchronized (transactionInterceptPayloads) {
+                    transactionInterceptPayloads.add(payload);
+                }
+            } else if (looksLikeTransactionResultHtml(payload)) {
                 synchronized (transactionInterceptPayloads) {
                     transactionInterceptPayloads.add(payload);
                 }
@@ -4046,6 +4401,128 @@ public final class FirstBankAutomation {
                 "first_bank_transaction_form_not_ready",
                 "First Bank transaction query form was not ready"
             );
+        }
+
+        boolean tryHttpTransactionQuery(String accountId, String startDateBank, String endDateBank) throws Exception {
+            String referer = TXN_URL + (normalizeDigits(accountId).isEmpty() ? "" : "?acnt=" + normalizeDigits(accountId));
+            for (String variantKey : new String[] { "primary", "digits", "roc" }) {
+                String variantStart = formatTransactionDateVariant(startDateBank, endDateBank, variantKey);
+                String variantEnd = formatTransactionEndDateVariant(startDateBank, endDateBank, variantKey);
+                String directUrl = buildDirectTransactionQueryUrl(accountId, variantStart, variantEnd);
+                String directHtml = executeTransactionHttpRequest(directUrl, referer, "GET", new JSONObject());
+                if (applyTransactionHttpHtml(directUrl, directHtml, "transaction_http_direct variant=" + variantKey)) {
+                    return true;
+                }
+            }
+
+            Object extracted = evaluateJavaScript(buildExtractTransactionFormScript(accountId, startDateBank, endDateBank));
+            if (!(extracted instanceof JSONObject)) {
+                return false;
+            }
+            JSONObject form = (JSONObject) extracted;
+            if (!form.optBoolean("ok", false)) {
+                return false;
+            }
+            String action = normalizeText(form.optString("action"));
+            String pageUrl = normalizeText(form.optString("pageUrl"));
+            if (action.isEmpty()) {
+                action = TXN_URL + (accountId.isEmpty() ? "" : "?acnt=" + accountId);
+            }
+            if (pageUrl.isEmpty()) {
+                pageUrl = action;
+            }
+            JSONObject params = form.optJSONObject("params");
+            if (params == null) {
+                return false;
+            }
+            String method = normalizeText(form.optString("method", "GET"));
+            if (method.isEmpty()) {
+                method = "GET";
+            }
+            for (String variantKey : new String[] { "primary", "digits", "roc" }) {
+                JSONObject attemptParams = new JSONObject(params.toString());
+                applyTransactionDateVariant(attemptParams, startDateBank, endDateBank, variantKey);
+                String responseHtml = executeTransactionHttpRequest(action, pageUrl, method, attemptParams);
+                if (applyTransactionHttpHtml(pageUrl, responseHtml, "transaction_http_replay variant=" + variantKey)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private boolean applyTransactionHttpHtml(String pageUrl, String responseHtml, String logLabel) throws Exception {
+            if (responseHtml.isEmpty() || looksLikeFirstBankLoginHtml(responseHtml)) {
+                return false;
+            }
+            boolean looksResult = looksLikeTransactionResultHtml(responseHtml);
+            Log.i(TAG, logLabel + " bytes=" + responseHtml.length() + " looksLikeResult=" + looksResult);
+            if (!looksResult) {
+                return false;
+            }
+            loadHtmlDocument(pageUrl, responseHtml);
+            synchronized (transactionInterceptPayloads) {
+                transactionInterceptPayloads.add(responseHtml);
+            }
+            return true;
+        }
+
+        private String executeTransactionHttpRequest(String action, String referer, String method, JSONObject params) throws Exception {
+            String normalizedMethod = normalizeText(method).toUpperCase(Locale.US);
+            if (normalizedMethod.isEmpty()) {
+                normalizedMethod = "POST";
+            }
+            String body = encodeFormUrlEncoded(params);
+            String requestUrl = action;
+            if ("GET".equals(normalizedMethod) && !body.isEmpty()) {
+                requestUrl = action + (action.contains("?") ? "&" : "?") + body;
+            }
+            URL url = new URL(requestUrl);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setInstanceFollowRedirects(true);
+            connection.setConnectTimeout(20_000);
+            connection.setReadTimeout(30_000);
+            connection.setRequestMethod(normalizedMethod);
+            if (!userAgentString.isEmpty()) {
+                connection.setRequestProperty("User-Agent", userAgentString);
+            }
+            String cookies = captureCookies();
+            if (!cookies.isEmpty()) {
+                connection.setRequestProperty("Cookie", cookies);
+            }
+            connection.setRequestProperty("Referer", referer);
+            connection.setRequestProperty("Origin", "https://ibank.firstbank.com.tw");
+            if ("POST".equals(normalizedMethod)) {
+                connection.setDoOutput(true);
+                connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
+                byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+                connection.getOutputStream().write(bytes);
+            }
+            int statusCode = connection.getResponseCode();
+            InputStream stream = statusCode >= 400 ? connection.getErrorStream() : connection.getInputStream();
+            byte[] raw = readAllBytes(stream);
+            String contentType = normalizeText(connection.getContentType());
+            return decodeBankHttpBody(raw, contentType);
+        }
+
+        void loadHtmlDocument(String baseUrl, String html) throws BankAutomationException {
+            CountDownLatch latch = new CountDownLatch(1);
+            navigationLatchRef.set(latch);
+            String normalizedBase = normalizeText(baseUrl);
+            final String safeBase = normalizedBase.isEmpty() ? TXN_URL : normalizedBase;
+            final String safeHtml = html == null ? "" : html;
+            runOnUiThreadAndWait(() -> webView.loadDataWithBaseURL(
+                safeBase,
+                safeHtml,
+                "text/html",
+                "UTF-8",
+                null
+            ));
+            try {
+                latch.await(15_000L, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+            }
+            sleep(800L);
         }
 
         boolean submitTransactionQuery(String accountId, String startDateBank, String endDateBank) throws Exception {

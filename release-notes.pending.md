@@ -2,6 +2,9 @@
 
 ---
 
+## v1.6.19
+- 第一銀行 sync：對齊 Node 後端以 GET `010103.html?acnt&txnStart&txnEnd` 直查明細；表單 HTTP 重放預設 GET、精簡 POST 欄位；收緊結果 HTML 判斷（排除起迄摘要列）；intercept／重放 HTML 可解析 `CnbTable` 列。
+
 ## v1.6.18
 - 第一銀行 sync：修正交易 XHR 攔截誤匹配 `jquery.js`（`query` 子字串）導致 WebView 腳本失效；帳戶 discover（`#generalACNT`／frame 入口）、010103 查詢與 datepicker 提交流程強化；新增 connect+sync 儀表測試與 intercept 單元測試（sync 交易列仍待 datepicker／POST 重放完成）。
 
