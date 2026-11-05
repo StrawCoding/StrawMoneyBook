@@ -28,6 +28,7 @@
 
         <footer class="row action-row">
           <div class="stack edit-save-footer">
+            <p v-if="editCollectingHint" class="muted">{{ editCollectingHint }}</p>
             <p v-if="!canSaveClaim && saveSubmitHint" class="muted">{{ saveSubmitHint }}</p>
             <div class="row">
               <button type="button" class="btn" :disabled="saving" @click="goBack">{{ t('common.cancel') }}</button>
@@ -81,7 +82,7 @@ import {
   pruneImportAmountOverrides,
   seedImportAmountOverrides,
 } from '@/ui/utils/claim-sheet-import-amount-overrides'
-import { isClaimDraftEditable } from '@/core/utils/claim-sheet-payment'
+import { isClaimCollecting, isClaimDraftEditable } from '@/core/utils/claim-sheet-payment'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useCategoryStore } from '@/ui/stores/category.store'
@@ -126,6 +127,11 @@ const backLink = computed(() => ({
 const claimPayments = ref([])
 
 const isEditableClaim = computed(() => isClaimDraftEditable(claim.value, { payments: claimPayments.value }))
+
+const editCollectingHint = computed(() => {
+  if (!claim.value || !isClaimCollecting(claim.value)) return ''
+  return t('claim_sheet.form.hint_edit_reverts_payments')
+})
 
 const entryTypeOptions = computed(() => [
   { label: t('claim_sheet.entry_type.expense'), value: 'expense' },
@@ -595,7 +601,7 @@ async function submit() {
 
   saving.value = true
   try {
-    await updateReimbursementDraft(ledgerStore.activeLedgerId, claimId.value, {
+    const updated = await updateReimbursementDraft(ledgerStore.activeLedgerId, claimId.value, {
       title: form.title,
       counterpartyName: form.counterpartyName,
       note: form.note,
@@ -606,7 +612,11 @@ async function submit() {
       ],
     })
     await reimbursementStore.load()
-    uiStore.pushToast(t('claim_sheet.toast.updated'))
+    uiStore.pushToast(
+      updated?.revertedPayments
+        ? t('claim_sheet.toast.updated_reverted_payments')
+        : t('claim_sheet.toast.updated'),
+    )
     await router.replace(backLink.value)
   } catch (error) {
     uiStore.pushToast(error.message ?? t('claim_sheet.toast.update_failed'), 'error')

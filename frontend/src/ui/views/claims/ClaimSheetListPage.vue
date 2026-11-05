@@ -1057,8 +1057,10 @@ async function submitCreateSheet() {
       ],
     }
 
+    let revertedPayments = false
     if (isEditing) {
-      await updateReimbursementDraft(ledgerStore.activeLedgerId, createForm.editingClaimId, payload)
+      const updated = await updateReimbursementDraft(ledgerStore.activeLedgerId, createForm.editingClaimId, payload)
+      revertedPayments = Boolean(updated?.revertedPayments)
     } else {
       await createReimbursementDraft(ledgerStore.activeLedgerId, payload)
     }
@@ -1067,7 +1069,11 @@ async function submitCreateSheet() {
     clearClaimSheetDraftSession()
     resetCreateForm()
     isCreateOpen.value = false
-    uiStore.pushToast(t(isEditing ? 'claim_sheet.toast.updated' : 'claim_sheet.toast.created'))
+    if (isEditing && revertedPayments) {
+      uiStore.pushToast(t('claim_sheet.toast.updated_reverted_payments'))
+    } else {
+      uiStore.pushToast(t(isEditing ? 'claim_sheet.toast.updated' : 'claim_sheet.toast.created'))
+    }
   } catch (error) {
     uiStore.pushToast(error.message ?? t(isEditingCreateForm.value ? 'claim_sheet.toast.update_failed' : 'claim_sheet.toast.create_failed'), 'error')
   } finally {

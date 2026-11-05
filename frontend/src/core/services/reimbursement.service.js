@@ -521,7 +521,7 @@ export async function updateReimbursementDraft(ledgerId, reimbursementId, payloa
   }
 
   return withTransaction(async () => {
-    const claim = await getReimbursementById(ledgerId, normalizedReimbursementId)
+    let claim = await getReimbursementById(ledgerId, normalizedReimbursementId)
     if (!claim) {
       throw new Error('找不到資料')
     }
@@ -531,12 +531,18 @@ export async function updateReimbursementDraft(ledgerId, reimbursementId, payloa
     }
 
     const recordedMinor = claimRecordedPaymentMinor(claim, payments)
-    if (String(claim.status ?? '') === 'paid' && recordedMinor <= 0) {
+    let revertedPayments = false
+    if (recordedMinor > 0) {
       const claimItems = await listReimbursementItems(ledgerId, normalizedReimbursementId)
       await revertPaidClaimEffects(ledgerId, claim, claimItems)
       claim = await getReimbursementById(ledgerId, normalizedReimbursementId)
-    } else if (payments.length && recordedMinor <= 0) {
+      revertedPayments = true
+    } else if (payments.length) {
       await deleteReimbursementPaymentsByReimbursementId(ledgerId, normalizedReimbursementId)
+    } else if (String(claim.status ?? '') === 'paid') {
+      const claimItems = await listReimbursementItems(ledgerId, normalizedReimbursementId)
+      await revertPaidClaimEffects(ledgerId, claim, claimItems)
+      claim = await getReimbursementById(ledgerId, normalizedReimbursementId)
     }
 
     const counterpartyId = await ensureCounterpartyByName(ledgerId, payload.counterpartyName ?? '')
@@ -547,10 +553,10 @@ export async function updateReimbursementDraft(ledgerId, reimbursementId, payloa
     })
     await replaceReimbursementItems(ledgerId, normalizedReimbursementId, payload.items)
     const updated = await recomputeReimbursementTotal(ledgerId, normalizedReimbursementId)
-    if (String(updated?.status ?? 'draft') !== 'draft') {
-      return updateReimbursementStatus(ledgerId, normalizedReimbursementId, 'draft')
-    }
-    return updated
+    const finalized = String(updated?.status ?? 'draft') !== 'draft'
+      ? await updateReimbursementStatus(ledgerId, normalizedReimbursementId, 'draft')
+      : updated
+    return { ...finalized, revertedPayments }
   })
 }
 

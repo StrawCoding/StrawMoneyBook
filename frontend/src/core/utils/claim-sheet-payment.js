@@ -83,15 +83,16 @@ export function claimRecordedPaymentMinor(claim, payments = null) {
   )
 }
 
-/** Draft edit is allowed until any payment is recorded (incl. claims stuck in approved/paid before first deposit). */
+/** Editable until fully paid or rejected; partial payments (collecting) may edit and save will revert installments. */
 export function isClaimDraftEditable(claim, options = {}) {
   if (!claim) return false
   const payments = options.payments ?? null
-  if (claimRecordedPaymentMinor(claim, payments) > 0) return false
+  const recordedMinor = claimRecordedPaymentMinor(claim, payments)
   const status = String(claim?.status ?? 'draft').trim()
   if (status === 'rejected') return false
   if (status === 'paid') {
-    return claimRecordedPaymentMinor(claim, payments) <= 0
+    return recordedMinor <= 0
   }
+  if (isClaimFullyPaid(claim)) return false
   return UNPAID_EDITABLE_STATUSES.has(status)
 }

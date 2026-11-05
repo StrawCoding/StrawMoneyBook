@@ -25,7 +25,8 @@ const advanceSourceMigration = readFileSync(
 
 test('reimbursement service supports updating draft claim sheets', () => {
   assert.match(reimbursementServiceSource, /export async function updateReimbursementDraft\(ledgerId, reimbursementId, payload\)/)
-  assert.match(reimbursementServiceSource, /if \(!isClaimDraftEditable\(claim\)\) \{\s+throw new Error\('已有入帳紀錄或已完成請款，無法編輯'\)/)
+  assert.match(reimbursementServiceSource, /if \(!isClaimDraftEditable\(claim, \{ payments \}\)\) \{\s+throw new Error\('已有入帳紀錄或已完成請款，無法編輯'\)/)
+  assert.match(reimbursementServiceSource, /if \(recordedMinor > 0\) \{[\s\S]*revertedPayments = true/)
   assert.match(reimbursementServiceSource, /await updateReimbursement\(ledgerId, normalizedReimbursementId, \{/)
   assert.match(reimbursementServiceSource, /await replaceReimbursementItems\(ledgerId, normalizedReimbursementId, payload\.items\)/)
 })

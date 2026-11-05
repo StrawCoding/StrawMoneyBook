@@ -48,13 +48,13 @@ test('claim remaining and collecting flags follow paid_minor writeback', () => {
   assert.equal(isClaimFullyPaid({ total_minor: 10000, paid_minor: 10000, status: 'paid' }), true)
 })
 
-test('isClaimDraftEditable allows unpaid draft and approved, blocks after any payment', () => {
-  assert.equal(isClaimDraftEditable({ status: 'draft', paid_minor: 0 }), true)
-  assert.equal(isClaimDraftEditable({ status: 'approved', paid_minor: 0 }), true)
-  assert.equal(isClaimDraftEditable({ status: 'submitted', paid_minor: 0 }), true)
-  assert.equal(isClaimDraftEditable({ status: 'approved', paid_minor: 100 }), false)
-  assert.equal(isClaimDraftEditable({ status: 'paid', paid_minor: 0 }), true)
-  assert.equal(isClaimDraftEditable({ status: 'paid', paid_minor: 100 }), false)
+test('isClaimDraftEditable allows collecting sheets and blocks only when fully paid', () => {
+  assert.equal(isClaimDraftEditable({ status: 'draft', paid_minor: 0, total_minor: 1000 }), true)
+  assert.equal(isClaimDraftEditable({ status: 'approved', paid_minor: 0, total_minor: 1000 }), true)
+  assert.equal(isClaimDraftEditable({ status: 'submitted', paid_minor: 0, total_minor: 1000 }), true)
+  assert.equal(isClaimDraftEditable({ status: 'approved', paid_minor: 400, total_minor: 1000 }), true)
+  assert.equal(isClaimDraftEditable({ status: 'paid', paid_minor: 1000, total_minor: 1000 }), false)
+  assert.equal(isClaimDraftEditable({ status: 'paid', paid_minor: 0, total_minor: 1000 }), true)
 })
 
 test('claimRecordedPaymentMinor prefers paid_minor and sums payment rows when claim is still zero', () => {
@@ -64,7 +64,11 @@ test('claimRecordedPaymentMinor prefers paid_minor and sums payment rows when cl
     500,
   )
   assert.equal(
-    isClaimDraftEditable({ status: 'approved', paid_minor: 0 }, { payments: [{ amount_minor: 1 }] }),
+    isClaimDraftEditable({ status: 'approved', paid_minor: 0, total_minor: 1000 }, { payments: [{ amount_minor: 1 }] }),
+    true,
+  )
+  assert.equal(
+    isClaimDraftEditable({ status: 'paid', paid_minor: 1000, total_minor: 1000 }, { payments: [{ amount_minor: 1 }] }),
     false,
   )
 })
