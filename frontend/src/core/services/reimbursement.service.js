@@ -583,16 +583,21 @@ export async function transitionReimbursementStatus(ledgerId, reimbursementId, n
       throw new Error('找不到資料')
     }
 
-    assertCanTransition(claim.status, nextStatus)
-
     if (nextStatus === 'paid') {
       throw new Error('paid 狀態請使用入帳流程')
     }
 
-    if (nextStatus === 'draft' && (String(claim.status ?? '') === 'paid' || claimPaidMinorOfSafe(claim) > 0)) {
+    const revertingPaymentsToDraft = (
+      nextStatus === 'draft'
+      && (String(claim.status ?? '') === 'paid' || claimPaidMinorOfSafe(claim) > 0)
+    )
+    if (revertingPaymentsToDraft) {
       const claimItems = await listReimbursementItems(ledgerId, claim.id)
       await revertPaidClaimEffects(ledgerId, claim, claimItems)
+      return updateReimbursementStatus(ledgerId, reimbursementId, nextStatus)
     }
+
+    assertCanTransition(claim.status, nextStatus)
 
     return updateReimbursementStatus(ledgerId, reimbursementId, nextStatus)
   })
