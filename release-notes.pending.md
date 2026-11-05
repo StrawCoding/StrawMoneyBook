@@ -2,6 +2,9 @@
 
 ---
 
+## v1.6.18
+- 第一銀行 sync：修正交易 XHR 攔截誤匹配 `jquery.js`（`query` 子字串）導致 WebView 腳本失效；帳戶 discover（`#generalACNT`／frame 入口）、010103 查詢與 datepicker 提交流程強化；新增 connect+sync 儀表測試與 intercept 單元測試（sync 交易列仍待 datepicker／POST 重放完成）。
+
 ## v1.6.16
 - 第一銀行 connect：登入後導向帳戶總覽 iframe（acntReviewAll／0101），強化帳號 discover；模擬器實測 connect 成功。
 

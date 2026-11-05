@@ -38,10 +38,36 @@ public class BankAutomationActivity extends Activity {
     public static final String EXTRA_DEBUG_TRACE_JSON = "bank_automation.debug_trace_json";
     public static final String EXTRA_ERROR_DATA_JSON = "bank_automation.error_data_json";
 
-    private static final long AUTOMATION_TIMEOUT_MS = 120_000L;
+    private static final long AUTOMATION_TIMEOUT_MS = 180_000L;
+    private static final long SYNC_AUTOMATION_TIMEOUT_MS = 300_000L;
     private static final Object BUSY_LOCK = new Object();
+    private static final Object RESULT_LOCK = new Object();
     private static boolean busy = false;
     private static BankAutomationActivity currentInstance = null;
+    private static volatile String lastAutomationResultJson = null;
+    private static volatile String lastAutomationErrorCode = null;
+    private static volatile String lastAutomationErrorMessage = null;
+
+    /** Instrumented tests read the last automation outcome (no credentials). */
+    public static String getLastAutomationResultJson() {
+        synchronized (RESULT_LOCK) {
+            return lastAutomationResultJson;
+        }
+    }
+
+    public static String getLastAutomationErrorCode() {
+        synchronized (RESULT_LOCK) {
+            return lastAutomationErrorCode;
+        }
+    }
+
+    public static void clearLastAutomationOutcome() {
+        synchronized (RESULT_LOCK) {
+            lastAutomationResultJson = null;
+            lastAutomationErrorCode = null;
+            lastAutomationErrorMessage = null;
+        }
+    }
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private ExecutorService executorService;
@@ -114,8 +140,9 @@ public class BankAutomationActivity extends Activity {
             return;
         }
 
+        long timeoutMs = ACTION_SYNC_BANK.equals(action) ? SYNC_AUTOMATION_TIMEOUT_MS : AUTOMATION_TIMEOUT_MS;
         timeoutRunnable = () -> finishWithError(new BankAutomationException("bank_automation_timeout", "Bank automation timed out"));
-        mainHandler.postDelayed(timeoutRunnable, AUTOMATION_TIMEOUT_MS);
+        mainHandler.postDelayed(timeoutRunnable, timeoutMs);
 
         executorService.execute(() -> runAction(action, payload));
     }
@@ -211,6 +238,12 @@ public class BankAutomationActivity extends Activity {
             } catch (JSONException ignored) {
             }
             result.putExtra(EXTRA_RESULT_JSON, safePayload.toString());
+            synchronized (RESULT_LOCK) {
+                lastAutomationResultJson = safePayload.toString();
+                lastAutomationErrorCode = null;
+                lastAutomationErrorMessage = null;
+            }
+            logSyncSummaryIfApplicable(stringExtra(getIntent(), EXTRA_ACTION), safePayload);
             Log.i("SMB-BankSync", "bank_automation_success action=" + stringExtra(getIntent(), EXTRA_ACTION));
             setResult(Activity.RESULT_OK, result);
             finish();
@@ -230,10 +263,37 @@ public class BankAutomationActivity extends Activity {
                 EXTRA_DEBUG_TRACE_JSON,
                 debugTrace == null ? "{}" : debugTrace.toJson(error.getCode(), error.getMessage()).toString()
             );
+            synchronized (RESULT_LOCK) {
+                lastAutomationResultJson = null;
+                lastAutomationErrorCode = error.getCode();
+                lastAutomationErrorMessage = error.getMessage();
+            }
             Log.i("SMB-BankSync", "bank_automation_error code=" + error.getCode() + " message=" + error.getMessage());
             setResult(Activity.RESULT_CANCELED, result);
             finish();
         });
+    }
+
+    private void logSyncSummaryIfApplicable(String action, JSONObject payload) {
+        if (!ACTION_SYNC_BANK.equals(action) || payload == null) {
+            return;
+        }
+        try {
+            org.json.JSONArray added = payload.optJSONArray("added");
+            int count = added == null ? 0 : added.length();
+            Log.i("SMB-BankSync", "bank_automation_sync_summary addedCount=" + count);
+            if (count > 0) {
+                org.json.JSONObject sample = added.getJSONObject(0);
+                Log.i(
+                    "SMB-BankSync",
+                    "bank_automation_sync_sample postedAt=" + sample.optString("postedAt")
+                        + " amountMinor=" + sample.optLong("amountMinor")
+                        + " currency=" + sample.optString("currency")
+                        + " providerTransactionId=" + sample.optString("providerTransactionId")
+                );
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     @Override
