@@ -2,6 +2,9 @@
 
 ---
 
+## v1.6.28
+- 華南銀行 sync：connect 保存 `homeUrl`；sync 先 bootstrap 再查詢；InqMain 直開／帳號 select 比對；查詢完成須見明細列或「查無資料」（不再誤判表單頁）；模擬器 live 煙測 `addedCount>0`。
+
 ## v1.6.26
 - 銀行同步：華南／第一銀行雙 provider 文案與建立精靈提示；新增 `HuaNanConnectSyncInstrumentedTest`（`-e` 憑證 live 煙測）。
 

@@ -39,6 +39,8 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -144,12 +146,13 @@ public final class HuaNanBankAutomation {
             runtime.enter(BankAutomationRuntime.Phase.DISCOVERING_ACCOUNTS);
 
             debugTrace.record("h1_probe", "running", "Capturing masked post-login structure");
+            session.waitForPostLoginShell();
+            JSONArray accounts = waitAndDiscoverAccounts(session, debugTrace);
             JSONObject h1Probe = captureStructuralProbe(session, "h1");
             mergeInterceptSnapshot(h1Probe, session.interceptSnapshot());
-
-            JSONArray accounts = discoverAccounts(session);
             h1Probe.put("accountCount", accounts.length());
             if (accounts.length() == 0) {
+                Log.i(TAG, "h1_probe_empty " + h1Probe.toString());
                 debugTrace.record("h1_probe", "error", "No syncable accounts via structural anchors", h1Probe);
                 runtime.markFailed("hua_nan_account_list_not_found", "Hua Nan account list was not found after login");
                 throw queryFailure(
@@ -172,6 +175,10 @@ public final class HuaNanBankAutomation {
             state.put("password", password);
             state.put("initialSyncStartDate", initialSyncStartDate);
             state.put("cookieHeader", session.captureCookies());
+            String homeUrl = session.getCurrentUrl();
+            if (!homeUrl.isEmpty() && homeUrl.contains("hncb.com.tw")) {
+                state.put("homeUrl", homeUrl);
+            }
             state.put("updatedAt", nowIso());
             vault.saveConnectionState(connectionId, state);
 
@@ -240,6 +247,7 @@ public final class HuaNanBankAutomation {
                 session.restoreCookies(cookieHeader);
                 debugTrace.record("restore_cookies", "ok", "Cookies restored");
             }
+            bootstrapSyncSession(activity, session, debugTrace, runtime, state);
 
             JSONArray added = new JSONArray();
             JSONArray accountResults = new JSONArray();
@@ -885,9 +893,33 @@ public final class HuaNanBankAutomation {
                   if (!/trx=com\\.lb\\.wibc\\.trx\\.InqMain/i.test(href)) continue;
                   try {
                     const url = new URL(href, location.href);
-                    const acct = url.searchParams.get('acct');
-                    if (acct) addAccount(found, acct, href, 'inq_main_href');
+                    for (const key of ['acct', 'account', 'acno', 'acctno', 'AcntNo']) {
+                      const acct = url.searchParams.get(key);
+                      if (acct) addAccount(found, acct, href, 'inq_main_href');
+                    }
                   } catch (_e) {}
+                }
+                for (const select of Array.from(doc.querySelectorAll('#acct1, select[name="acct1"]'))) {
+                  for (const option of Array.from(select.options || [])) {
+                    const value = text(option.value || option.textContent || '');
+                    addAccount(found, value, value, 'acct1_select');
+                  }
+                }
+                for (const row of Array.from(doc.querySelectorAll('tr'))) {
+                  const link = row.querySelector('a[href*="InqMain"], a[href*="inqMain"]');
+                  if (!link) continue;
+                  const href = text(link.getAttribute('href') || '');
+                  try {
+                    const url = new URL(href, location.href);
+                    for (const key of ['acct', 'account', 'acno', 'acctno']) {
+                      const acct = url.searchParams.get(key);
+                      if (acct) addAccount(found, acct, href, 'inq_main_row');
+                    }
+                  } catch (_e) {}
+                  const rowDigits = digits(text(row.textContent || ''));
+                  if (rowDigits.length >= 10 && rowDigits.length <= 16) {
+                    addAccount(found, rowDigits, text(row.textContent || ''), 'inq_main_row_text');
+                  }
                 }
               }
               return Array.from(found.values());
@@ -921,6 +953,68 @@ public final class HuaNanBankAutomation {
             normalized.put(account);
         }
         return normalized;
+    }
+
+    static String buildInqMainUrl(String accountId) {
+        String normalized = normalizeAccountId(accountId);
+        return "https://netbank.hncb.com.tw/netbank/servlet/TrxDispatcher"
+            + "?Recognition=private&state=prompt&target=InsAnTr"
+            + "&trx=com.lb.wibc.trx.InqMain"
+            + (normalized.isEmpty() ? "" : "&acct=" + URLEncoder.encode(normalized, StandardCharsets.UTF_8));
+    }
+
+    private static void bootstrapSyncSession(
+        Activity activity,
+        BrowserSession session,
+        BankAutomationDebugTrace debugTrace,
+        BankAutomationRuntime runtime,
+        JSONObject state
+    ) throws Exception {
+        String homeUrl = normalizeText(state.optString("homeUrl"));
+        if (!homeUrl.isEmpty()) {
+            debugTrace.record("sync_bootstrap", "running", "Loading saved post-login home");
+            session.loadUrl(homeUrl);
+            debugTrace.record("sync_bootstrap", "ok", "Post-login home loaded");
+        } else {
+            debugTrace.record("sync_bootstrap", "running", "Loading Hua Nan login for sync bootstrap");
+            session.loadUrl(LOGIN_URL);
+        }
+        if (session.isLoginPage()) {
+            debugTrace.record("sync_bootstrap", "running", "Session cookies expired; silent login");
+            performLogin(
+                activity,
+                session,
+                debugTrace,
+                runtime,
+                state.optString("nationalId"),
+                state.optString("userCode"),
+                state.optString("password"),
+                ""
+            );
+        }
+        session.waitForPostLoginShell();
+    }
+
+    private static JSONArray waitAndDiscoverAccounts(BrowserSession session, BankAutomationDebugTrace debugTrace) throws Exception {
+        long deadline = System.currentTimeMillis() + 35_000L;
+        JSONArray accounts = new JSONArray();
+        int attempt = 0;
+        while (System.currentTimeMillis() < deadline) {
+            attempt += 1;
+            accounts = discoverAccounts(session);
+            if (accounts.length() > 0) {
+                JSONObject details = new JSONObject();
+                putJsonValue(details, "attempt", attempt);
+                putJsonValue(details, "count", accounts.length());
+                debugTrace.record("discover_accounts_poll", "ok", "Accounts discovered after login", details);
+                return accounts;
+            }
+            if (attempt == 1 || attempt % 3 == 0) {
+                session.tryOpenAccountDiscoveryNavigation();
+            }
+            session.pause(900L);
+        }
+        return accounts;
     }
 
     private static boolean openTransactionInquiry(
@@ -1087,6 +1181,14 @@ public final class HuaNanBankAutomation {
         }
 
         if (!alreadyOnForm && !clicked) {
+            debugTrace.record("h2_direct_inqmain", "running", "Loading InqMain URL directly");
+            session.loadUrl(buildInqMainUrl(accountId));
+            session.waitForInquiryFormReady();
+            alreadyOnForm = true;
+            inquiryMatch = "inq_main_direct_url";
+        }
+
+        if (!alreadyOnForm && !clicked) {
             return false;
         }
 
@@ -1131,6 +1233,7 @@ public final class HuaNanBankAutomation {
             );
         }
 
+        session.armNavigationLatchForNextLoad();
         Object fillRaw = session.evaluateJavaScript(String.format(Locale.US, """
             (() => {
               const accountId = %s;
@@ -1156,6 +1259,7 @@ public final class HuaNanBankAutomation {
                 visit(window);
                 return docs;
               }
+              function digits(value) { return text(value).replace(/\\D+/g, ''); }
               function setSelect(el, value) {
                 if (!el) return false;
                 const wanted = String(value);
@@ -1165,6 +1269,25 @@ public final class HuaNanBankAutomation {
                 if (!match && /^0+\\d+$/.test(wanted)) {
                   const asInt = String(parseInt(wanted, 10));
                   match = opts.find((o) => String(o.value) === asInt || text(o.textContent) === asInt);
+                }
+                if (!match) return false;
+                el.value = match.value;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+              }
+              function setAccountSelect(el, accountId) {
+                if (!el) return false;
+                if (setSelect(el, accountId)) return true;
+                const wanted = digits(accountId);
+                if (wanted.length < 8) return false;
+                const opts = Array.from(el.options || []);
+                let match = opts.find((o) => digits(o.value) === wanted);
+                if (!match) {
+                  match = opts.find((o) => {
+                    const d = digits(o.value) || digits(o.textContent);
+                    return d === wanted || (wanted.length >= 4 && d.endsWith(wanted.slice(-4)));
+                  });
                 }
                 if (!match) return false;
                 el.value = match.value;
@@ -1195,7 +1318,7 @@ public final class HuaNanBankAutomation {
               const acct = doc.querySelector('#acct1, select[name="acct1"]');
               let acctSet = false;
               if (acct) {
-                acctSet = setSelect(acct, accountId);
+                acctSet = setAccountSelect(acct, accountId);
                 if (typeof win.changeAcct === 'function') {
                   try { win.changeAcct(0); } catch (_e) {}
                 }
@@ -1278,32 +1401,56 @@ public final class HuaNanBankAutomation {
         }
         debugTrace.record("h2_probe", "ok", "Inquiry form filled and submitted", fillMeta);
 
+        session.awaitNavigationQuietly(18_000L);
+        session.pause(400L);
+
         try {
             session.waitForCondition("""
                 (() => {
+                  function text(value) { return String(value ?? '').trim(); }
+                  function isFormControlTable(table) {
+                    const blob = text(table.textContent);
+                    if (/inqtype|S_Year|E_Year|送出資料|帳號（單選）|一般查詢/.test(blob)) return true;
+                    if (table.querySelector('select[name="S_Year"], select[name="acct1"], #acct1, input[name="inqtype"]')) return true;
+                    return false;
+                  }
+                  function hasTxnDate(value) {
+                    return /(\\d{2,4})[\\/.-]\\d{1,2}[\\/.-]\\d{1,2}/.test(text(value));
+                  }
                   function scan(doc) {
                     if (!doc) return false;
-                    const text = String(doc.body?.innerText ?? '');
-                    if (/查無資料|沒有資料|no data/i.test(text)) return true;
+                    const bodyText = text(doc.body?.innerText ?? '');
+                    if (/查無資料|沒有資料|no data/i.test(bodyText)) return true;
                     const tables = Array.from(doc.querySelectorAll('table'));
                     for (const table of tables) {
-                      const header = String(table.querySelector('tr')?.textContent || '');
-                      if (/交易日期|交易日|日期|摘要|說明|金額|支出|存入|餘額|交易/.test(header)) return true;
-                      const rows = table.querySelectorAll('tr');
-                      const blob = String(table.textContent || '');
-                      if (rows.length >= 2 && /\\d{2,4}[\\/.-]\\d{1,2}[\\/.-]\\d{1,2}/.test(blob)) return true;
+                      if (isFormControlTable(table)) continue;
+                      const bodyRows = Array.from(table.querySelectorAll('tr'));
+                      if (bodyRows.length < 2) continue;
+                      for (let index = 1; index < bodyRows.length; index += 1) {
+                        const joined = Array.from(bodyRows[index].querySelectorAll('th,td'))
+                          .map((cell) => text(cell.textContent)).join(' ');
+                        if (!joined || /合計|小計|查無|沒有資料/.test(joined)) continue;
+                        if (hasTxnDate(joined) && /\\d/.test(joined)) return true;
+                      }
                     }
                     return false;
                   }
                   try {
-                    if (scan(document)) return true;
-                    for (let i = 0; i < window.frames.length; i += 1) {
-                      try { if (scan(window.frames[i].document)) return true; } catch (_e) {}
+                    const seen = new Set();
+                    function visit(win) {
+                      if (!win || seen.has(win)) return false;
+                      seen.add(win);
+                      if (win.document && scan(win.document)) return true;
+                      for (let i = 0; i < win.frames.length; i += 1) {
+                        if (visit(win.frames[i])) return true;
+                      }
+                      return false;
                     }
+                    return visit(window);
                   } catch (_e) {}
                   return false;
                 })();
-                """, 12_000L, 400L, "hua_nan_transaction_query_failed", "Hua Nan transaction query did not finish in time");
+                """, 20_000L, 450L, "hua_nan_transaction_query_failed", "Hua Nan transaction query did not finish in time");
         } catch (BankAutomationException queryError) {
             JSONObject timeoutProbe = captureStructuralProbe(session, "h2");
             mergeInterceptSnapshot(timeoutProbe, session.interceptSnapshot());
@@ -2285,7 +2432,7 @@ public final class HuaNanBankAutomation {
                   setValue(captchaInput, captcha);
                   if (typeof window.doSubmit === 'function') {
                     window.doSubmit();
-                    return true;
+                    return 'doSubmit';
                   }
                   const form = document.querySelector('#LoginForm_post, form[name="LoginForm"]');
                   if (form && typeof form.submit === 'function') {
@@ -2295,9 +2442,138 @@ public final class HuaNanBankAutomation {
                   return false;
                 })();
                 """, quoteJs(nationalId), quoteJs(userCode), quoteJs(password), quoteJs(captchaText)));
-            if (!Boolean.TRUE.equals(result)) {
+            if (result == null || Boolean.FALSE.equals(result)) {
                 throw new BankAutomationException("hua_nan_login_trigger_missing", "Hua Nan login trigger was not found");
             }
+            CountDownLatch latch = new CountDownLatch(1);
+            navigationLatchRef.set(latch);
+            waitForNavigation(null, latch);
+            pause(800L);
+        }
+
+        void pause(long ms) {
+            sleep(ms);
+        }
+
+        void armNavigationLatchForNextLoad() {
+            CountDownLatch latch = new CountDownLatch(1);
+            navigationLatchRef.set(latch);
+            lastFinishedUrlRef.set("");
+        }
+
+        void awaitNavigationQuietly(long maxWaitMs) {
+            CountDownLatch latch = navigationLatchRef.get();
+            if (latch == null) return;
+            long deadline = System.currentTimeMillis() + maxWaitMs;
+            while (System.currentTimeMillis() < deadline) {
+                try {
+                    if (latch.await(350L, TimeUnit.MILLISECONDS)) return;
+                } catch (InterruptedException error) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                String finished = normalizeText(lastFinishedUrlRef.get());
+                if (!finished.isEmpty() && finished.contains("hncb.com.tw")) return;
+            }
+        }
+
+        void tryOpenAccountDiscoveryNavigation() throws Exception {
+            evaluateJavaScript("""
+                (() => {
+                  function text(value) { return String(value ?? '').trim(); }
+                  function clickNode(node) {
+                    if (!node || typeof node.click !== 'function') return false;
+                    node.click();
+                    return true;
+                  }
+                  function collectDocs() {
+                    const docs = [];
+                    const seen = new Set();
+                    function visit(win) {
+                      if (!win || seen.has(win)) return;
+                      seen.add(win);
+                      try {
+                        if (win.document) docs.push(win.document);
+                        for (let i = 0; i < win.frames.length; i += 1) visit(win.frames[i]);
+                      } catch (_e) {}
+                    }
+                    visit(window);
+                    return docs;
+                  }
+                  for (const doc of collectDocs()) {
+                    const inq = Array.from(doc.querySelectorAll('a[href*="InqMain"]'))
+                      .find((node) => /trx=com\\.lb\\.wibc\\.trx\\.InqMain/i.test(String(node.getAttribute('href') || '')));
+                    if (inq && clickNode(inq)) return true;
+                  }
+                  for (const doc of collectDocs()) {
+                    const parent = Array.from(doc.querySelectorAll('a[href*="InqAcctParent"]')).find(Boolean)
+                      || Array.from(doc.querySelectorAll('a')).find((node) => text(node.textContent) === '帳務查詢');
+                    if (parent && clickNode(parent)) return true;
+                  }
+                  return false;
+                })();
+                """);
+            pause(1200L);
+        }
+
+        void waitForInquiryFormReady() throws BankAutomationException {
+            waitForCondition("""
+                (() => {
+                  function ready(doc) {
+                    if (!doc) return false;
+                    const hasAcct = Boolean(doc.querySelector('#acct1, select[name="acct1"]'));
+                    const hasYear = Boolean(doc.querySelector('select[name="S_Year"], select[name="E_Year"]'));
+                    const hasSubmit = Boolean(doc.querySelector('a[href*="doSubmit"]'))
+                      || (doc.defaultView && typeof doc.defaultView.doSubmit === 'function');
+                    return hasAcct && (hasYear || hasSubmit);
+                  }
+                  try {
+                    const seen = new Set();
+                    function visit(win) {
+                      if (!win || seen.has(win)) return false;
+                      seen.add(win);
+                      if (win.document && ready(win.document)) return true;
+                      for (let i = 0; i < win.frames.length; i += 1) {
+                        if (visit(win.frames[i])) return true;
+                      }
+                      return false;
+                    }
+                    return visit(window);
+                  } catch (_e) { return false; }
+                })();
+                """, 18_000L, 400L, "hua_nan_transaction_page_timeout", "Hua Nan inquiry form did not become ready");
+        }
+
+        String getCurrentUrl() throws Exception {
+            Object result = evaluateJavaScript("(() => String(location?.href ?? ''))();");
+            return normalizeText(result == null ? "" : String.valueOf(result));
+        }
+
+        void waitForPostLoginShell() throws BankAutomationException {
+            waitForCondition("""
+                (() => {
+                  function visit(win, seen, hit) {
+                    if (!win || seen.has(win)) return;
+                    seen.add(win);
+                    try {
+                      const doc = win.document;
+                      if (!doc) return;
+                      const text = String(doc.body?.innerText ?? '');
+                      if (/密碼錯誤|代號錯誤|登入失敗|驗證碼錯誤|資料錯誤/i.test(text)
+                          && doc.querySelector('#LoginForm_post, form[name="LoginForm"]')) {
+                        hit.loginError = true;
+                      }
+                      if (doc.querySelector('a[href*="InqMain"], #acct1, select[name="acct1"]')) hit.ready = true;
+                      if (/帳務查詢|帳戶總覽|我的帳戶|首頁/i.test(text) && !doc.querySelector('#TrxCaptchaKey')) hit.ready = true;
+                      for (let i = 0; i < win.frames.length; i += 1) visit(win.frames[i], seen, hit);
+                    } catch (_e) {}
+                  }
+                  const hit = { ready: false, loginError: false };
+                  visit(window, new Set(), hit);
+                  if (hit.loginError) return false;
+                  return hit.ready || !Boolean(document.querySelector('#LoginForm_post, form[name="LoginForm"]'));
+                })();
+                """, 22_000L, 450L, "hua_nan_post_login_timeout", "Hua Nan post-login home did not become ready");
         }
 
         boolean waitForLoginSuccess() throws Exception {
@@ -2307,7 +2583,8 @@ public final class HuaNanBankAutomation {
                     Object ready = evaluateJavaScript("""
                         (() => {
                           const text = String(document.body?.innerText ?? '');
-                          if (/驗證碼|圖形驗證|密碼錯誤|代號錯誤|身分證|登入失敗|alert/i.test(text)
+                          if (/密碼錯誤|代號錯誤|登入失敗|驗證碼錯誤/i.test(text)) return false;
+                          if (/驗證碼|圖形驗證/i.test(text)
                               && document.querySelector('#LoginForm_post, form[name="LoginForm"]')) {
                             return false;
                           }
