@@ -1,5 +1,13 @@
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
+import {
+  claimPaidMinorOf,
+  claimRemainingMinor,
+  claimTotalMinorOf,
+  itemAmountMinorOf,
+  itemRemainingMinor,
+  itemSettledMinorOf,
+} from '../utils/claim-sheet-payment.js'
 
 const PAGE_WIDTH_PX = 794
 const PAGE_HEIGHT_PX = 1123
@@ -92,7 +100,26 @@ function buildLabels(options = {}) {
     emptyDescription: options.emptyDescription || '未命名項目',
     uncategorized: options.uncategorized || '未分類',
     summaryHint: options.summaryHint || '匯入報銷備註與手動代收項目均已納入此 PDF。',
+    paidLabel: options.paidLabel || '已入帳',
+    remainingLabel: options.remainingLabel || '剩餘未收',
+    itemClaimAmountLabel: options.itemClaimAmountLabel || '請款金額',
+    itemSettledLabel: options.itemSettledLabel || '已請款',
+    itemRemainingLabel: options.itemRemainingLabel || '剩餘',
+    paymentsTitle: options.paymentsTitle || '入帳紀錄',
+    paymentsEmpty: options.paymentsEmpty || '尚無入帳紀錄',
+    paymentDateLabel: options.paymentDateLabel || '入帳時間',
+    paymentAmountLabel: options.paymentAmountLabel || '入帳金額',
+    paymentAccountLabel: options.paymentAccountLabel || '帳戶',
+    unknownAccount: options.unknownAccount || '未指定帳戶',
   }
+}
+
+export function detailHasPartialSettlement(claim, items = []) {
+  const paidMinor = claimPaidMinorOf(claim)
+  const totalMinor = claimTotalMinorOf(claim)
+  if (paidMinor > 0 && claimRemainingMinor(claim) > 0) return true
+  if (paidMinor > 0 && totalMinor > 0 && paidMinor < totalMinor) return true
+  return items.some((item) => itemSettledMinorOf(item) > 0)
 }
 
 function createPdfStyles() {
@@ -156,7 +183,44 @@ function createPdfStyles() {
         line-height: 1.6;
         color: #475569;
       }
-      .total-box,
+      .payment-summary {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .payment-metric {
+        padding: 14px 16px;
+        border-radius: 18px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        background: rgba(255, 255, 255, 0.94);
+        display: grid;
+        gap: 6px;
+      }
+      .payment-metric--total {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        color: #f8fafc;
+        border-color: transparent;
+      }
+      .payment-metric--paid {
+        background: linear-gradient(135deg, #ecfdf5 0%, #ffffff 88%);
+        border-color: rgba(16, 185, 129, 0.28);
+      }
+      .payment-metric--remaining {
+        background: linear-gradient(135deg, #fffbeb 0%, #ffffff 88%);
+        border-color: rgba(245, 158, 11, 0.28);
+      }
+      .payment-metric span {
+        font-size: 11px;
+        color: #64748b;
+      }
+      .payment-metric--total span {
+        color: rgba(248, 250, 252, 0.72);
+      }
+      .payment-metric strong {
+        font-size: 22px;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+      }
       .continuation-total {
         min-width: 160px;
         padding: 14px 16px;
@@ -166,20 +230,69 @@ function createPdfStyles() {
         display: grid;
         gap: 6px;
       }
-      .total-box span,
       .continuation-total span {
         font-size: 11px;
         color: rgba(248, 250, 252, 0.72);
       }
-      .total-box strong,
       .continuation-total strong {
         font-size: 24px;
         line-height: 1.1;
+      }
+      .continuation-metrics {
+        display: grid;
+        gap: 6px;
+        min-width: 180px;
+        text-align: right;
+        font-size: 12px;
+        color: #475569;
+      }
+      .continuation-metrics strong {
+        color: #0f172a;
       }
       .summary-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 10px;
+      }
+      .payments-panel {
+        padding: 12px 14px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid rgba(148, 163, 184, 0.20);
+        display: grid;
+        gap: 8px;
+      }
+      .payments-panel h4 {
+        margin: 0;
+        font-size: 14px;
+      }
+      .payments-table {
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        overflow: hidden;
+      }
+      .payments-table-head,
+      .payments-table-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr);
+        gap: 10px;
+        padding: 8px 12px;
+        align-items: center;
+      }
+      .payments-table-head {
+        background: #f1f5f9;
+        font-size: 11px;
+        font-weight: 700;
+        color: #334155;
+      }
+      .payments-table-row {
+        background: #ffffff;
+        border-top: 1px solid rgba(226, 232, 240, 0.9);
+        font-size: 12px;
+      }
+      .payments-table-row .amount {
+        text-align: right;
+        font-weight: 700;
       }
       .summary-card,
       .claim-note,
@@ -250,6 +363,20 @@ function createPdfStyles() {
         grid-template-columns: 46px minmax(0, 2.25fr) minmax(0, 1.15fr) minmax(0, 1.3fr) 98px 94px;
         gap: 12px;
         align-items: start;
+      }
+      .items-table--partial .items-table-head,
+      .items-table--partial .item-main-grid {
+        grid-template-columns: 36px minmax(0, 2fr) minmax(0, 1fr) 78px 72px 72px 72px;
+      }
+      .items-table--partial .cell-amount-settled {
+        text-align: right;
+        font-size: 12px;
+        color: #047857;
+      }
+      .items-table--partial .cell-amount-remaining {
+        text-align: right;
+        font-size: 12px;
+        color: #b45309;
       }
       .items-table-head {
         padding: 10px 14px;
@@ -342,7 +469,61 @@ function createPdfContainer() {
   return container
 }
 
-function createFirstPageMarkup(claim, items, labels, locale) {
+function createPaymentSummaryMarkup(claim, labels, locale) {
+  const totalMinor = claimTotalMinorOf(claim)
+  const paidMinor = claimPaidMinorOf(claim)
+  const remainingMinor = claimRemainingMinor(claim)
+  return `
+    <section class="payment-summary">
+      <article class="payment-metric payment-metric--total">
+        <span>${escapeHtml(labels.totalLabel)}</span>
+        <strong>${escapeHtml(formatAmountMinor(totalMinor, locale))}</strong>
+      </article>
+      <article class="payment-metric payment-metric--paid">
+        <span>${escapeHtml(labels.paidLabel)}</span>
+        <strong>${escapeHtml(formatAmountMinor(paidMinor, locale))}</strong>
+      </article>
+      <article class="payment-metric payment-metric--remaining">
+        <span>${escapeHtml(labels.remainingLabel)}</span>
+        <strong>${escapeHtml(formatAmountMinor(remainingMinor, locale))}</strong>
+      </article>
+    </section>
+  `
+}
+
+function createPaymentsHistoryMarkup(payments, labels, locale) {
+  const rows = Array.isArray(payments) ? payments : []
+  if (!rows.length) {
+    return `
+      <section class="payments-panel">
+        <h4>${escapeHtml(labels.paymentsTitle)}</h4>
+        <p class="empty-note">${escapeHtml(labels.paymentsEmpty)}</p>
+      </section>
+    `
+  }
+  return `
+    <section class="payments-panel">
+      <h4>${escapeHtml(labels.paymentsTitle)}</h4>
+      <div class="payments-table">
+        <div class="payments-table-head">
+          <span>${escapeHtml(labels.paymentDateLabel)}</span>
+          <span>${escapeHtml(labels.paymentAccountLabel)}</span>
+          <span>${escapeHtml(labels.paymentAmountLabel)}</span>
+        </div>
+        ${rows.map((payment) => `
+          <div class="payments-table-row">
+            <span>${escapeHtml(formatDate(payment?.paid_at, locale))}</span>
+            <span>${escapeHtml(String(payment?.account_name ?? '').trim() || labels.unknownAccount)}</span>
+            <span class="amount">${escapeHtml(formatAmountMinor(payment?.amount_minor, locale))}</span>
+          </div>
+        `).join('')}
+      </div>
+    </section>
+  `
+}
+
+function createFirstPageMarkup(claim, items, labels, locale, payments = []) {
+  const showPaymentsPanel = claimPaidMinorOf(claim) > 0 || (Array.isArray(payments) && payments.length > 0)
   return `
     <div class="claim-pdf">
       <header class="hero">
@@ -351,11 +532,9 @@ function createFirstPageMarkup(claim, items, labels, locale) {
           <h1>${escapeHtml(String(claim?.title ?? '').trim() || labels.detailTitle)}</h1>
           <p class="hero-note">${escapeHtml(labels.summaryHint)}</p>
         </div>
-        <div class="total-box">
-          <span>${escapeHtml(labels.totalLabel)}</span>
-          <strong>${escapeHtml(formatAmountMinor(claim?.total_minor, locale))}</strong>
-        </div>
       </header>
+
+      ${createPaymentSummaryMarkup(claim, labels, locale)}
 
       <section class="summary-grid">
         <article class="summary-card">
@@ -380,12 +559,16 @@ function createFirstPageMarkup(claim, items, labels, locale) {
         ? `<section class="claim-note"><span class="meta-label">${escapeHtml(labels.noteLabel)}</span><p>${escapeHtml(claim.note)}</p></section>`
         : ''}
 
+      ${showPaymentsPanel ? createPaymentsHistoryMarkup(payments, labels, locale) : ''}
+
       ${createItemsPanelMarkup(claim, items, labels, locale)}
     </div>
   `
 }
 
 function createContinuationPageMarkup(claim, items, labels, locale) {
+  const paidMinor = claimPaidMinorOf(claim)
+  const remainingMinor = claimRemainingMinor(claim)
   return `
     <div class="claim-pdf">
       <header class="continuation-head">
@@ -394,9 +577,10 @@ function createContinuationPageMarkup(claim, items, labels, locale) {
           <h2>${escapeHtml(String(claim?.title ?? '').trim() || labels.detailTitle)}</h2>
           <p class="continuation-note">${escapeHtml(labels.summaryHint)}</p>
         </div>
-        <div class="continuation-total">
-          <span>${escapeHtml(labels.totalLabel)}</span>
-          <strong>${escapeHtml(formatAmountMinor(claim?.total_minor, locale))}</strong>
+        <div class="continuation-metrics">
+          <div>${escapeHtml(labels.totalLabel)} <strong>${escapeHtml(formatAmountMinor(claim?.total_minor, locale))}</strong></div>
+          <div>${escapeHtml(labels.paidLabel)} <strong>${escapeHtml(formatAmountMinor(paidMinor, locale))}</strong></div>
+          <div>${escapeHtml(labels.remainingLabel)} <strong>${escapeHtml(formatAmountMinor(remainingMinor, locale))}</strong></div>
         </div>
       </header>
 
@@ -406,6 +590,26 @@ function createContinuationPageMarkup(claim, items, labels, locale) {
 }
 
 function createItemsPanelMarkup(claim, items, labels, locale) {
+  const partial = detailHasPartialSettlement(claim, items)
+  const tableClass = partial ? 'items-table items-table--partial' : 'items-table'
+  const tableHead = partial
+    ? `
+          <span>#</span>
+          <span>${escapeHtml(labels.descriptionLabel)}</span>
+          <span>${escapeHtml(labels.categoryLabel)}</span>
+          <span>${escapeHtml(labels.dateLabel)}</span>
+          <span>${escapeHtml(labels.itemClaimAmountLabel)}</span>
+          <span>${escapeHtml(labels.itemSettledLabel)}</span>
+          <span>${escapeHtml(labels.itemRemainingLabel)}</span>
+        `
+    : `
+          <span>#</span>
+          <span>${escapeHtml(labels.descriptionLabel)}</span>
+          <span>${escapeHtml(labels.categoryLabel)}</span>
+          <span>${escapeHtml(labels.sourceLabel)}</span>
+          <span>${escapeHtml(labels.dateLabel)}</span>
+          <span>${escapeHtml(labels.amountLabel)}</span>
+        `
   return `
     <section class="items-panel">
       <div class="items-panel-head">
@@ -415,14 +619,9 @@ function createItemsPanelMarkup(claim, items, labels, locale) {
         </div>
         <strong class="items-count">${escapeHtml(`${labels.itemCountLabel}：${items.length}`)}</strong>
       </div>
-      <div class="items-table">
+      <div class="${tableClass}" data-partial="${partial ? '1' : '0'}">
         <div class="items-table-head">
-          <span>#</span>
-          <span>${escapeHtml(labels.descriptionLabel)}</span>
-          <span>${escapeHtml(labels.categoryLabel)}</span>
-          <span>${escapeHtml(labels.sourceLabel)}</span>
-          <span>${escapeHtml(labels.dateLabel)}</span>
-          <span>${escapeHtml(labels.amountLabel)}</span>
+          ${tableHead}
         </div>
         <div class="items-table-body" data-role="items-body"></div>
       </div>
@@ -434,12 +633,18 @@ function createContinuationLabel(label) {
   return `${label}（續）`
 }
 
-function buildItemViewModel(item, index, labels, locale, categoryName) {
+function buildItemViewModel(item, index, labels, locale, categoryName, partialColumns = false) {
   const description = String(item?.description ?? '').trim() || labels.emptyDescription
   const importedNote = String(item?.transaction_note ?? '').trim()
   const itemSourceText = `${claimItemTypeLabel(item, labels)} / ${claimItemSourceLabel(item, labels)}`
+  const claimAmountMinor = itemAmountMinorOf(item)
+  const settledMinor = itemSettledMinorOf(item)
+  const remainingMinor = itemRemainingMinor(item)
   return {
-    amountText: formatAmountMinor(item?.amount_minor, locale),
+    amountText: formatAmountMinor(claimAmountMinor, locale),
+    settledText: formatAmountMinor(settledMinor, locale),
+    remainingText: formatAmountMinor(remainingMinor, locale),
+    partialColumns,
     categoryName,
     dateText: formatDateOnly(item?.occurred_at, locale),
     description,
@@ -450,6 +655,22 @@ function buildItemViewModel(item, index, labels, locale, categoryName) {
 }
 
 function createItemMainGridMarkup(viewModel) {
+  if (viewModel.partialColumns) {
+    return `
+    <div class="item-main-grid">
+      <span class="item-index">${escapeHtml(viewModel.indexLabel)}</span>
+      <div class="cell cell-description">
+        <strong>${escapeHtml(viewModel.description)}</strong>
+        <small>${escapeHtml(viewModel.itemSourceText)}</small>
+      </div>
+      <span class="cell">${escapeHtml(viewModel.categoryName)}</span>
+      <span class="cell cell-date">${escapeHtml(viewModel.dateText)}</span>
+      <strong class="cell cell-amount">${escapeHtml(viewModel.amountText)}</strong>
+      <strong class="cell cell-amount-settled">${escapeHtml(viewModel.settledText)}</strong>
+      <strong class="cell cell-amount-remaining">${escapeHtml(viewModel.remainingText)}</strong>
+    </div>
+  `
+  }
   return `
     <div class="item-main-grid">
       <span class="item-index">${escapeHtml(viewModel.indexLabel)}</span>
@@ -465,11 +686,11 @@ function createItemMainGridMarkup(viewModel) {
   `
 }
 
-function createPageElement(claim, items, labels, locale, firstPage) {
+function createPageElement(claim, items, labels, locale, firstPage, payments = []) {
   const page = document.createElement('section')
   page.className = 'claim-pdf-page'
   page.innerHTML = firstPage
-    ? createFirstPageMarkup(claim, items, labels, locale)
+    ? createFirstPageMarkup(claim, items, labels, locale, payments)
     : createContinuationPageMarkup(claim, items, labels, locale)
   return {
     page,
@@ -640,12 +861,14 @@ function appendSplitItemRows(viewModel, labels, currentPage, appendPage) {
 function buildPagedContainer(detail, options = {}, container) {
   const claim = detail?.claim ?? {}
   const items = Array.isArray(detail?.items) ? detail.items : []
+  const payments = Array.isArray(detail?.payments) ? detail.payments : []
   const locale = options.locale || 'zh-TW'
   const labels = buildLabels(options)
+  const partialColumns = detailHasPartialSettlement(claim, items)
   const pages = []
 
   function appendPage(firstPage) {
-    const pageState = createPageElement(claim, items, labels, locale, firstPage)
+    const pageState = createPageElement(claim, items, labels, locale, firstPage, payments)
     container.appendChild(pageState.page)
     pages.push(pageState)
     return pageState
@@ -654,7 +877,7 @@ function buildPagedContainer(detail, options = {}, container) {
   let currentPage = appendPage(true)
   items.forEach((item, index) => {
     const categoryName = options.categoryName?.(item?.category_id) || labels.uncategorized
-    const viewModel = buildItemViewModel(item, index, labels, locale, categoryName)
+    const viewModel = buildItemViewModel(item, index, labels, locale, categoryName, partialColumns)
     const fullRow = createItemRowElement(viewModel, labels)
 
     if (!tryAppendRow(currentPage, fullRow)) {
