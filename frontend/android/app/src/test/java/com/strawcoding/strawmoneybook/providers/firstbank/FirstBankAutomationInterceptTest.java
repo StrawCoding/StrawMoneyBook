@@ -48,6 +48,25 @@ public class FirstBankAutomationInterceptTest {
     }
 
     @Test
+    public void parsesAmaPageDespiteFcyInformationNotFound() throws Exception {
+        String sample = """
+            NTD Demand Savings Deposit
+            2026/10/19 10:09:00 外匯結售 0 900 900 Normal
+            FCY Demand Deposit
+            Information not found
+            """;
+        org.junit.Assert.assertFalse(FirstBankAutomation.looksLikeFirstBankNoDataHtml(sample));
+        var rows = FirstBankAutomation.parseTransactionsFromInnerTextBlob(
+            sample,
+            "29168214193",
+            "2026/10/01",
+            "2026/10/30"
+        );
+        org.junit.Assert.assertEquals(1, rows.length());
+        org.junit.Assert.assertEquals(90000L, rows.getJSONObject(0).optLong("amountMinor"));
+    }
+
+    @Test
     public void ignoresEnquirySummaryRowsWithoutAmounts() {
         String sample = "<table class=\"CnbTable\"><tr><td>Account Number</td><td>29168214193</td><td>Starting and Ending Dates</td><td>2026/10/20-2026/11/05</td></tr></table>";
         assertFalse(FirstBankAutomation.looksLikeTransactionResultHtml(sample));

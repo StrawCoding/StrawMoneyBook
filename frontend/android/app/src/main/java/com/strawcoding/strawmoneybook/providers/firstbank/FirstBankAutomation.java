@@ -1594,7 +1594,20 @@ public final class FirstBankAutomation {
         return normalizeText(endDateBank);
     }
 
+    static boolean hasFirstBankTransactionRowsInHtml(String body) {
+        String normalized = normalizeText(body);
+        if (normalized.isEmpty()) {
+            return false;
+        }
+        Pattern dateTime = Pattern.compile("\\d{4}/\\d{1,2}/\\d{1,2}\\s+\\d{1,2}:\\d{2}:\\d{2}");
+        Pattern amount = Pattern.compile("\\b\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?\\b|\\b\\d+(?:\\.\\d+)?\\b");
+        return dateTime.matcher(normalized).find() && amount.matcher(normalized).find();
+    }
+
     static boolean looksLikeFirstBankNoDataHtml(String body) {
+        if (hasFirstBankTransactionRowsInHtml(body)) {
+            return false;
+        }
         String normalized = normalizeText(body);
         return Pattern.compile(
             "查無資料|沒有資料|查無交易|Information not found|no transaction record",
@@ -1606,6 +1619,9 @@ public final class FirstBankAutomation {
         String normalized = normalizeText(body);
         if (normalized.length() < 80) {
             return false;
+        }
+        if (hasFirstBankTransactionRowsInHtml(normalized)) {
+            return true;
         }
         if (looksLikeFirstBankNoDataHtml(normalized)) {
             return true;
@@ -1845,6 +1861,10 @@ public final class FirstBankAutomation {
         if (looksLikeFirstBankNoDataHtml(html)) {
             return items;
         }
+        JSONArray fromInnerText = parseTransactionsFromInnerTextBlob(stripHtmlTags(html), accountId, startDateBank, endDateBank);
+        if (fromInnerText.length() > 0) {
+            return fromInnerText;
+        }
         Pattern rowPattern = Pattern.compile("<tr\\b[^>]*>([\\s\\S]*?)</tr>", Pattern.CASE_INSENSITIVE);
         Pattern cellPattern = Pattern.compile("<t[hd]\\b[^>]*>([\\s\\S]*?)</t[hd]>", Pattern.CASE_INSENSITIVE);
         Matcher rowMatcher = rowPattern.matcher(html);
@@ -1903,9 +1923,69 @@ public final class FirstBankAutomation {
         return normalizeText(value.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " "));
     }
 
+    static JSONArray parseTransactionsFromInnerTextBlob(String innerText, String accountId, String startDateBank, String endDateBank) {
+        JSONArray items = new JSONArray();
+        String blob = normalizeText(innerText);
+        if (blob.isEmpty()) {
+            return items;
+        }
+        Pattern segmentStart = Pattern.compile("(\\d{4}/\\d{1,2}/\\d{1,2}\\s+\\d{1,2}:\\d{2}:\\d{2})");
+        Matcher matcher = segmentStart.matcher(blob);
+        List<Integer> starts = new ArrayList<>();
+        List<String> dateTimes = new ArrayList<>();
+        while (matcher.find()) {
+            starts.add(matcher.start());
+            dateTimes.add(matcher.group(1));
+        }
+        for (int index = 0; index < starts.size(); index += 1) {
+            int end = index + 1 < starts.size() ? starts.get(index + 1) : blob.length();
+            String chunk = blob.substring(starts.get(index), end).trim();
+            String[] parts = chunk.split("\\s+");
+            if (parts.length < 5) {
+                continue;
+            }
+            String postedAtText = dateTimes.get(index);
+            String transactionType = parts[2];
+            long debitMinor = parsePlainAmountMinor(parts[3]);
+            long creditMinor = parsePlainAmountMinor(parts[4]);
+            long amountMinor = creditMinor != 0 ? creditMinor : (debitMinor != 0 ? -debitMinor : 0);
+            if (amountMinor == 0) {
+                continue;
+            }
+            try {
+                JSONObject item = new JSONObject();
+                item.put("providerTransactionId", "fbtxn_" + Long.toString(Math.abs((accountId + "|" + postedAtText + "|" + amountMinor).hashCode()), 36));
+                item.put("providerAccountId", accountId);
+                item.put("postedAt", parsePostedAtIso(postedAtText));
+                item.put("amountMinor", amountMinor);
+                item.put("currency", "TWD");
+                item.put("description", transactionType.isEmpty() ? "First Bank transaction" : transactionType);
+                item.put("status", "posted");
+                JSONObject raw = new JSONObject();
+                raw.put("rangeStart", startDateBank);
+                raw.put("rangeEnd", endDateBank);
+                raw.put("chunk", chunk);
+                item.put("rawJson", raw.toString());
+                if (!normalizeText(item.optString("postedAt")).isEmpty()) {
+                    items.put(item);
+                }
+            } catch (JSONException ignored) {
+            }
+        }
+        return items;
+    }
+
+    private static long parsePlainAmountMinor(String cell) {
+        String source = normalizeText(cell);
+        if (source.isEmpty() || !source.matches("[\\d,().+-]+")) {
+            return 0;
+        }
+        return parseAmountMinorFromCell(source);
+    }
+
     private static long parseAmountMinorFromCell(String cell) {
         String source = normalizeText(cell);
-        if (source.isEmpty() || !Pattern.compile("\\d{1,3}(?:,\\d{3})+").matcher(source).find()) {
+        if (source.isEmpty() || !Pattern.compile("\\d").matcher(source).find()) {
             return 0;
         }
         boolean negative = source.contains("(") || source.startsWith("-");
@@ -3748,8 +3828,8 @@ public final class FirstBankAutomation {
                   const value = text(header).toLowerCase();
                   if (value.includes('日期') || value.includes('時間') || value.includes('date') || value.includes('time')) return 'postedAt';
                   if (value.includes('交易類別') || value.includes('transaction')) return 'transactionType';
-                  if (value.includes('支出') || value.includes('提出') || value.includes('借方') || value.includes('debit') || value.includes('withdraw')) return 'debit';
-                  if (value.includes('存入') || value.includes('貸方') || value.includes('credit') || value.includes('deposit')) return 'credit';
+                  if (value.includes('支出') || value.includes('提出') || value.includes('借方') || value.includes('debit') || value.includes('withdraw') || value.includes('outgoing')) return 'debit';
+                  if (value.includes('存入') || value.includes('貸方') || value.includes('credit') || value.includes('deposit') || value.includes('incoming')) return 'credit';
                   if (value.includes('餘額') || value.includes('balance')) return 'balance';
                   if (value.includes('狀態') || value.includes('status')) return 'status';
                   if (value.includes('備註') || value.includes('remark') || value.includes('note')) return 'note';
@@ -3833,6 +3913,37 @@ public final class FirstBankAutomation {
                   if (!postedAtText || numericCells.length === 0) continue;
                   const item = rowToItem(cells, postedAtText, numericCells[0], '', cells[1] || '', cells[cells.length - 1] || '', '');
                   if (item) items.push(item);
+                }
+              }
+              function parseInnerTextBlocks(blob) {
+                const normalized = text(blob);
+                if (!normalized) return [];
+                const found = [];
+                const re = /(\\d{4}\\/\\d{1,2}\\/\\d{1,2}\\s+\\d{1,2}:\\d{2}:\\d{2})/g;
+                let match;
+                while ((match = re.exec(normalized)) !== null) {
+                  found.push({ index: match.index, postedAtText: match[1] });
+                }
+                const parsed = [];
+                for (let index = 0; index < found.length; index += 1) {
+                  const start = found[index].index;
+                  const end = index + 1 < found.length ? found[index + 1].index : normalized.length;
+                  const chunk = normalized.slice(start, end).trim();
+                  const parts = chunk.split(/\\s+/);
+                  if (parts.length < 5) continue;
+                  const postedAtText = found[index].postedAtText;
+                  const transactionType = parts[2] || '';
+                  const debitMinor = parseMinor(parts[3]);
+                  const creditMinor = parseMinor(parts[4]);
+                  let amountMinor = creditMinor || (debitMinor ? debitMinor * -1 : 0);
+                  const item = rowToItem(parts, postedAtText, amountMinor, transactionType, parts[parts.length - 1] || '', parts[parts.length - 2] || '', parts[5] || '');
+                  if (item) parsed.push(item);
+                }
+                return parsed;
+              }
+              if (items.length === 0) {
+                for (const doc of docs) {
+                  items.push(...parseInnerTextBlocks(doc.body?.innerText ?? ''));
                 }
               }
               return items;

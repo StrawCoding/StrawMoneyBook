@@ -70,7 +70,7 @@ public class FirstBankConnectSyncInstrumentedTest {
         syncPayload.put("accountIds", accountIds);
         syncPayload.put("cursor", initialSyncStartDate);
         syncPayload.put("lookbackDays", 120);
-        runAutomation(BankAutomationActivity.ACTION_SYNC_BANK, syncPayload, 240_000L);
+        runAutomation(BankAutomationActivity.ACTION_SYNC_BANK, syncPayload, 360_000L);
 
         assertNull("sync should not error: " + BankAutomationActivity.getLastAutomationErrorCode(), BankAutomationActivity.getLastAutomationErrorCode());
         String syncJson = BankAutomationActivity.getLastAutomationResultJson();

@@ -2,6 +2,9 @@
 
 ---
 
+## v1.6.24
+- 第一銀行 sync：AMA／010103 明細頁外幣區「Information not found」不再誤判全頁無資料；innerText／未加逗號金額（如 900）可解析；instrumented sync 逾時 6 分鐘。
+
 ## v1.6.22
 - 第一銀行 sync：金如意／010103 直查與表單重放補齊 `acctNoTmp`／`acctNo`／`accNo`／`ccd=00`／`fundFlag=1`（對齊第 e 個網 iframe 查詢字串）。
 
