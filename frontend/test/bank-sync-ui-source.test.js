@@ -31,6 +31,14 @@ test('bank sync create page uses wizard steps and batch account mapping', () => 
   assert.doesNotMatch(createPageSource, /mock_hint/)
 })
 
+test('bank sync create page uses radio group for provider selection', () => {
+  assert.match(createPageSource, /role="radiogroup"/)
+  assert.match(createPageSource, /type="radio"/)
+  assert.match(createPageSource, /v-model="form\.providerId"/)
+  assert.match(createPageSource, /handleProviderChange/)
+  assert.doesNotMatch(createPageSource, /selectProvider\(/)
+})
+
 test('bank sync create page supports manual captcha fallback', () => {
   assert.match(createPageSource, /showCaptchaPanel/)
   assert.match(createPageSource, /hua_nan_captcha_manual_required/)

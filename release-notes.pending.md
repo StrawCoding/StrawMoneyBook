@@ -2,6 +2,9 @@
 
 ---
 
+## v1.6.29
+- 銀行同步建立精靈：第一銀行／華南改 radio + label 選取，修正 Android 點卡片無法切換 provider。
+
 ## v1.6.28
 - 華南銀行 sync：connect 保存 `homeUrl`；sync 先 bootstrap 再查詢；InqMain 直開／帳號 select 比對；查詢完成須見明細列或「查無資料」（不再誤判表單頁）；模擬器 live 煙測 `addedCount>0`。
 

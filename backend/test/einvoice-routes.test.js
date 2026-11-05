@@ -178,7 +178,7 @@ describe('einvoice routes', { concurrency: 1 }, () => {
 
   const res = await callHandler(handler, {
     cardNo: '0910047171',
-    cardEncrypt: 'Swxd3167@',
+    cardEncrypt: 'Example-Test-Secret1@',
     startDate: '2026-05-01',
     endDate: '2026-05-18',
   }, '/api/einvoice/query-invoices', await authHeadersFor('missing-config@example.com'))
@@ -191,7 +191,7 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   const { default: handler } = await import('../src/routes/einvoice.js?unauthorized')
   const res = await callHandler(handler, {
     cardNo: '0910047171',
-    cardEncrypt: 'Swxd3167@',
+    cardEncrypt: 'Example-Test-Secret1@',
     startDate: '2026-05-01',
     endDate: '2026-05-18',
   })
@@ -204,7 +204,7 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   const { default: handler } = await import('../src/routes/einvoice.js?missing-auth')
   const res = await callHandler(handler, {
     cardNo: '0910047171',
-    cardEncrypt: 'Swxd3167@',
+    cardEncrypt: 'Example-Test-Secret1@',
     startDate: '2026-05-01',
     endDate: '2026-05-18',
   }, '/api/einvoice/query-invoices', { 'x-straw-client-key': 'client-key' })
@@ -217,7 +217,7 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   const { default: handler } = await import('../src/routes/einvoice.js?membership-required')
   const res = await callHandler(handler, {
     cardNo: '0910047171',
-    cardEncrypt: 'Swxd3167@',
+    cardEncrypt: 'Example-Test-Secret1@',
     startDate: '2026-05-01',
     endDate: '2026-05-18',
   }, '/api/einvoice/query-invoices', await authHeadersFor('einvoice-free@example.com', { member: false }))
@@ -243,7 +243,7 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   const { default: handler } = await import('../src/routes/einvoice.js?symbol-card')
   const res = await callHandler(handler, {
     cardNo: '0910047171',
-    cardEncrypt: 'Swxd3167@',
+    cardEncrypt: 'Example-Test-Secret1@',
     startDate: '2026-05-01',
     endDate: '2026-05-18',
   }, '/api/einvoice/query-invoices', await authHeadersFor('symbol-card@example.com'))
@@ -256,7 +256,7 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   const { default: handler } = await import('../src/routes/einvoice.js?invalid-date-range')
   const res = await callHandler(handler, {
     cardNo: '0910047171',
-    cardEncrypt: 'Swxd3167@',
+    cardEncrypt: 'Example-Test-Secret1@',
     startDate: '2026-05-18',
     endDate: '2026-05-01',
   }, '/api/einvoice/query-invoices', await authHeadersFor('invalid-date@example.com'))
@@ -269,7 +269,7 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   const { default: handler } = await import('../src/routes/einvoice.js?success')
   const res = await callHandler(handler, {
     cardNo: '0910047171',
-    cardEncrypt: 'Swxd3167@',
+    cardEncrypt: 'Example-Test-Secret1@',
     startDate: '2026-05-01',
     endDate: '2026-05-18',
   }, '/api/einvoice/query-invoices', await authHeadersFor('success@example.com'))
@@ -285,7 +285,7 @@ describe('einvoice routes', { concurrency: 1 }, () => {
 
   const startRes = await callHandler(handler, {
     cardNo: '0910047171',
-    cardEncrypt: 'Swxd3167@',
+    cardEncrypt: 'Example-Test-Secret1@',
     force_captcha: true,
   }, '/api/einvoice/scrape/start', await authHeadersFor('scrape-flow@example.com'))
 
@@ -304,7 +304,7 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   const queryRes = await callHandler(handler, {
     session_id: startRes.payload.session_id,
     cardNo: '0910047171',
-    cardEncrypt: 'Swxd3167@',
+    cardEncrypt: 'Example-Test-Secret1@',
     startDate: '2026-05-01',
     endDate: '2026-05-18',
   }, '/api/einvoice/scrape/query', await authHeadersFor('scrape-flow@example.com'))
@@ -337,7 +337,7 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   const { default: handler } = await import('../src/routes/einvoice.js?cancel')
   const startRes = await callHandler(handler, {
     cardNo: '0910047171',
-    cardEncrypt: 'Swxd3167@',
+    cardEncrypt: 'Example-Test-Secret1@',
   }, '/api/einvoice/scrape/start', await authHeadersFor('cancel@example.com'))
 
   const cancelRes = await callHandler(handler, {
@@ -353,14 +353,14 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   const headers = await authHeadersFor('concurrent@example.com')
   const first = await callHandler(handler, {
     cardNo: '0910047171',
-    cardEncrypt: 'Swxd3167@',
+    cardEncrypt: 'Example-Test-Secret1@',
   }, '/api/einvoice/scrape/start', headers)
 
   assert.equal(first.statusCode, 200)
 
   const second = await callHandler(handler, {
     cardNo: '0910047171',
-    cardEncrypt: 'Swxd3167@',
+    cardEncrypt: 'Example-Test-Secret1@',
   }, '/api/einvoice/scrape/start', headers)
 
   assert.equal(second.statusCode, 429)
@@ -372,7 +372,7 @@ describe('einvoice routes', { concurrency: 1 }, () => {
 
   const third = await callHandler(handler, {
     cardNo: '0910047171',
-    cardEncrypt: 'Swxd3167@',
+    cardEncrypt: 'Example-Test-Secret1@',
   }, '/api/einvoice/scrape/start', headers)
 
   assert.equal(third.statusCode, 200)
@@ -386,13 +386,13 @@ describe('einvoice routes', { concurrency: 1 }, () => {
 
   const first = await callHandler(handler, {
     cardNo: '0910047171',
-    cardEncrypt: 'Swxd3167@',
+    cardEncrypt: 'Example-Test-Secret1@',
     startDate: '2026-05-01',
     endDate: '2026-05-18',
   }, '/api/einvoice/query-invoices', headers)
   const second = await callHandler(handler, {
     cardNo: '0910047171',
-    cardEncrypt: 'Swxd3167@',
+    cardEncrypt: 'Example-Test-Secret1@',
     startDate: '2026-05-01',
     endDate: '2026-05-18',
   }, '/api/einvoice/query-invoices', headers)

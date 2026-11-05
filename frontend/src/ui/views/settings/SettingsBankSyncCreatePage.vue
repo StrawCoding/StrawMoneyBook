@@ -35,19 +35,24 @@
 
       <article v-if="currentStep === 1" class="card panel">
         <p class="muted">{{ platformHint }}</p>
-        <div
-          v-for="provider in providerOptions"
-          :key="provider.value"
-          class="provider-card"
-          :class="{ selected: form.providerId === provider.value }"
-          :data-testid="`bank-sync-provider-${provider.value}`"
-          role="button"
-          tabindex="0"
-          @click="selectProvider(provider.value)"
-          @keydown.enter.prevent="selectProvider(provider.value)"
-          @keydown.space.prevent="selectProvider(provider.value)"
-        >
-          <strong>{{ provider.label }}</strong>
+        <div class="provider-list" role="radiogroup" :aria-label="t('settings_bank_sync_create.wizard.step1_title')">
+          <label
+            v-for="provider in providerOptions"
+            :key="provider.value"
+            class="provider-card"
+            :class="{ selected: form.providerId === provider.value }"
+            :data-testid="`bank-sync-provider-${provider.value}`"
+          >
+            <input
+              v-model="form.providerId"
+              class="provider-radio"
+              type="radio"
+              name="bankSyncProvider"
+              :value="provider.value"
+              @change="handleProviderChange"
+            />
+            <strong>{{ provider.label }}</strong>
+          </label>
         </div>
         <p v-if="!hasMultipleProviders" class="muted coming-soon">{{ t('settings_bank_sync_create.wizard.coming_soon') }}</p>
         <div class="row action-row">
@@ -436,9 +441,7 @@ function applyCredentialDefaultsFromSchema() {
   }
 }
 
-function selectProvider(providerId) {
-  if (form.providerId === providerId) return
-  form.providerId = providerId
+function handleProviderChange() {
   showCaptchaPanel.value = false
   captchaImageSrc.value = ''
   form.captchaCode = ''
@@ -661,15 +664,33 @@ h3 {
   padding: 12px;
 }
 
+.provider-list {
+  display: grid;
+  gap: 10px;
+}
+
 .provider-card {
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.provider-radio {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--primary);
 }
 
 .provider-card.selected {
-  border-color: color-mix(in srgb, var(--primary) 40%, var(--line));
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--line));
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 25%, transparent);
 }
 
-.provider-card:focus-visible {
+.provider-card:has(.provider-radio:focus-visible) {
   outline: 2px solid color-mix(in srgb, var(--primary) 55%, transparent);
   outline-offset: 2px;
 }

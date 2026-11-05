@@ -11,11 +11,11 @@ import {
 test('e-invoice credential encryption requires the matching IV for each field', async () => {
   const deviceUuid = 'test-device-uuid'
   const phone = await encryptCredential('0910047171', deviceUuid)
-  const password = await encryptCredential('Swxd3167@', deviceUuid)
+  const password = await encryptCredential('Example-Test-Secret1@', deviceUuid)
 
   assert.notEqual(phone.iv, password.iv)
   assert.equal(await decryptCredential(phone.encrypted, phone.iv, deviceUuid), '0910047171')
-  assert.equal(await decryptCredential(password.encrypted, password.iv, deviceUuid), 'Swxd3167@')
+  assert.equal(await decryptCredential(password.encrypted, password.iv, deviceUuid), 'Example-Test-Secret1@')
   await assert.rejects(() => decryptCredential(password.encrypted, phone.iv, deviceUuid))
 })
 
