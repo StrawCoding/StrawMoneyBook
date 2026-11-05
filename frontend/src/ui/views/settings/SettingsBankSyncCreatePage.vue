@@ -56,7 +56,7 @@
       </article>
 
       <article v-else-if="currentStep === 2" class="card panel">
-        <p class="muted hint-block">{{ t('settings_bank_sync_create.hua_nan_hint') }}</p>
+        <p class="muted hint-block">{{ credentialProviderHint }}</p>
 
         <label class="field">
           {{ t('settings_bank_sync_create.initial_sync_start_date') }}
@@ -271,9 +271,18 @@ const credentialSchema = computed(() => getBankProviderCredentialSchema(form.pro
 const visibleCredentialFields = computed(() => {
   return credentialSchema.value.filter((field) => field.id !== 'captchaCode')
 })
-const captchaManualRequiredMessage = computed(() => {
+const credentialProviderHint = computed(() => {
+  if (form.providerId === 'first_bank_tw') {
+    return t('settings_bank_sync_create.first_bank_hint')
+  }
   if (form.providerId === 'hua_nan_bank_tw') {
-    return t('settings_bank_sync_create.error.hua_nan_captcha_manual_required')
+    return t('settings_bank_sync_create.hua_nan_hint')
+  }
+  return t('settings_bank_sync_create.provider_hint')
+})
+const captchaManualRequiredMessage = computed(() => {
+  if (form.providerId === 'first_bank_tw') {
+    return t('settings_bank_sync_create.error.first_bank_captcha_manual_required')
   }
   return t('settings_bank_sync_create.error.hua_nan_captcha_manual_required')
 })
@@ -316,10 +325,10 @@ const canSaveAccounts = computed(() => {
 })
 const confirmMessage = computed(() => {
   const providerLabel = providerOptions.value.find((item) => item.value === form.providerId)?.label || form.providerId
-  return t(
-    'settings_bank_sync_create.confirm.hua_nan_message',
-    `確認要以 ${providerLabel} 建立銀行連線，並從 ${form.initialSyncStartDate} 開始同步嗎？`,
-  )
+  return t('settings_bank_sync_create.confirm.message', {
+    provider: providerLabel,
+    startDate: form.initialSyncStartDate,
+  })
 })
 
 onMounted(async () => {
@@ -471,6 +480,16 @@ function resolveCreateErrorMessage(error, fallbackKey) {
     hua_nan_legacy_reconnect_required: t('settings_bank_sync_create.error.hua_nan_legacy_reconnect_required'),
     hua_nan_session_expired: t('settings_bank_sync_create.error.hua_nan_session_expired'),
     hua_nan_credentials_required: t('settings_bank_sync_create.error.hua_nan_credentials_required'),
+    first_bank_national_id_required: t('settings_bank_sync_create.error.first_bank_national_id_required'),
+    first_bank_user_code_required: t('settings_bank_sync_create.error.first_bank_user_code_required'),
+    first_bank_password_required: t('settings_bank_sync_create.error.first_bank_password_required'),
+    first_bank_initial_start_date_required: t('settings_bank_sync_create.error.first_bank_initial_start_date_required'),
+    first_bank_captcha_manual_required: t('settings_bank_sync_create.error.first_bank_captcha_manual_required'),
+    first_bank_login_failed: t('settings_bank_sync_create.error.first_bank_login_failed'),
+    first_bank_account_list_not_found: t('settings_bank_sync_create.error.first_bank_account_list_not_found'),
+    first_bank_transaction_query_failed: t('settings_bank_sync_create.error.first_bank_transaction_query_failed'),
+    first_bank_session_expired: t('settings_bank_sync_create.error.first_bank_session_expired'),
+    first_bank_legacy_reconnect_required: t('settings_bank_sync_create.error.first_bank_legacy_reconnect_required'),
     bank_automation_busy: t('settings_bank_sync_create.error.bank_automation_busy'),
     bank_automation_timeout: t('settings_bank_sync_create.error.bank_automation_timeout'),
     bank_automation_android_only: t('settings_bank_sync_create.error.bank_automation_android_only'),

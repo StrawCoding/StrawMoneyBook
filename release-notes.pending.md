@@ -2,6 +2,9 @@
 
 ---
 
+## v1.6.26
+- 銀行同步：華南／第一銀行雙 provider 文案與建立精靈提示；新增 `HuaNanConnectSyncInstrumentedTest`（`-e` 憑證 live 煙測）。
+
 ## v1.6.24
 - 第一銀行 sync：AMA／010103 明細頁外幣區「Information not found」不再誤判全頁無資料；innerText／未加逗號金額（如 900）可解析；instrumented sync 逾時 6 分鐘。
 

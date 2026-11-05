@@ -17,7 +17,7 @@
 
 合約：watermark = `coveredThrough`（不是 finish wall-clock）；`providerTransactionId` 方案版本化；dual-key 優先 `lastSyncAt` > `last_sync_at`。
 
-**第一銀行**：已自產品面／provider registry／原生實作移除。不得註冊 `first_bank_tw`，不得還原 `FirstBankAutomation`。歷史稽核文件可保留「已移除」聲明，但本規格不再維護第一銀行 0C／巨石拆分章節。
+**第一銀行**：已恢復 Android 原生 `providers/firstbank`（`first_bank_tw`），與華南並列於 `provider-registry.js`／`BankProviderRegistry`。H0/H2 合約各自維護；第一銀行 010103 金如意 query 見 environment-facts。
 
 ## 真機閘（不得用 JVM 代替）
 
