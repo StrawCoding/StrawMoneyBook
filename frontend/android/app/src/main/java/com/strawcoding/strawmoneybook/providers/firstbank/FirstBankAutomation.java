@@ -4,6 +4,7 @@ import com.strawcoding.strawmoneybook.BankAutomationDebugTrace;
 import com.strawcoding.strawmoneybook.BankAutomationException;
 import com.strawcoding.strawmoneybook.BankAutomationVault;
 import com.strawcoding.strawmoneybook.TesseractBridge;
+import com.strawcoding.strawmoneybook.core.BankAutomationProgressTracker;
 import com.strawcoding.strawmoneybook.core.CaptchaSolver;
 
 import android.app.Activity;
@@ -263,6 +264,16 @@ public final class FirstBankAutomation {
         JSONArray added = new JSONArray();
         boolean reloginAttempted = false;
 
+        BankAutomationProgressTracker progressTracker = new BankAutomationProgressTracker("sync_bank", PROVIDER_ID);
+        int totalWindows = 0;
+        for (int previewIndex = 0; previewIndex < accountIds.length(); previewIndex += 1) {
+            String previewAccountId = normalizeDigits(accountIds.optString(previewIndex));
+            if (previewAccountId.isEmpty()) continue;
+            totalWindows += splitDateRange(startDate, endDate).size();
+        }
+        progressTracker.setTotalUnits(Math.max(1, totalWindows));
+        progressTracker.reportPhase("sync_bootstrap", "", 8);
+
         for (int accountIndex = 0; accountIndex < accountIds.length(); accountIndex += 1) {
             String accountId = normalizeDigits(accountIds.optString(accountIndex));
             if (accountId.isEmpty()) continue;
@@ -340,9 +351,15 @@ public final class FirstBankAutomation {
                     for (int rowIndex = 0; rowIndex < rows.length(); rowIndex += 1) {
                         added.put(rows.getJSONObject(rowIndex));
                     }
+                    String accountMask = accountId.length() >= 4
+                        ? accountId.substring(accountId.length() - 4)
+                        : accountId;
+                    progressTracker.completeWindow("sync_window", accountMask);
                 }
             }
         }
+
+        progressTracker.completeSuccess();
 
         JSONArray deduped = dedupeTransactions(added);
         state.put("cookieHeader", session.captureCookies());

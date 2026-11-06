@@ -1,5 +1,10 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
 import { logBankSyncAction } from '../../core/services/bank-sync-debug.service.js'
+import {
+  beginBankSyncProgressTracking,
+  resetBankSyncProgress,
+  updateBankSyncProgress,
+} from './progress.js'
 import { isRegisteredBankProviderId } from './provider-registry.js'
 
 const BankAutomation = registerPlugin('BankAutomation')
@@ -63,6 +68,30 @@ function withProviderId(payload = {}) {
   }
 }
 
+async function withNativeProgressListener(actionName, runner) {
+  if (!isNativeBankAutomationRuntimeSupported()) {
+    return runner()
+  }
+  beginBankSyncProgressTracking(actionName)
+  let listenerHandle = null
+  try {
+    listenerHandle = await BankAutomation.addListener('bankAutomationProgress', (event) => {
+      updateBankSyncProgress({
+        active: true,
+        percent: Number(event?.percent ?? 0),
+        stage: String(event?.stage ?? ''),
+        action: String(event?.action ?? actionName),
+      })
+    })
+    return await runner()
+  } finally {
+    if (listenerHandle && typeof listenerHandle.remove === 'function') {
+      await listenerHandle.remove()
+    }
+    resetBankSyncProgress()
+  }
+}
+
 /** Architecture B generic connect. */
 export async function connectNativeBank(payload = {}) {
   logBankSyncAction('native.connect', {
@@ -74,7 +103,7 @@ export async function connectNativeBank(payload = {}) {
     throw createNativeBankAutomationError('Unsupported bank provider', 'bank_provider_unsupported')
   }
   try {
-    return await BankAutomation.connectBank(next)
+    return await withNativeProgressListener('connect_bank', () => BankAutomation.connectBank(next))
   } catch (error) {
     throw normalizePluginError(error, 'Bank connect failed')
   }
@@ -91,7 +120,7 @@ export async function syncNativeBank(payload = {}) {
     throw createNativeBankAutomationError('Unsupported bank provider', 'bank_provider_unsupported')
   }
   try {
-    return await BankAutomation.syncBank(next)
+    return await withNativeProgressListener('sync_bank', () => BankAutomation.syncBank(next))
   } catch (error) {
     throw normalizePluginError(error, 'Bank sync failed')
   }

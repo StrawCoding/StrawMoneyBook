@@ -208,6 +208,8 @@ export const MESSAGES_JA = {
   'settings_bank_sync.actions.review': '未取込を確認',
   'settings_bank_sync.actions.sync_now': '今すぐ同期',
   'settings_bank_sync.actions.syncing': '同期中...',
+  'settings_bank_sync.progress.percent': '同期 {percent}%',
+  'settings_bank_sync.progress.background_hint': '同期はバックグラウンドで実行されます。完了すると結果が表示されます。',
   'settings_bank_sync.actions.disconnect': '接続解除',
   'settings_bank_sync.actions.disconnecting': '解除中...',
   'settings_bank_sync.actions.delete': '接続を削除',

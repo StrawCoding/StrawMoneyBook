@@ -2,6 +2,9 @@
 
 ---
 
+## v1.6.30
+- 銀行同步：Android 自動化維持背景執行緒 + WebView 主執行緒；connect/sync 完成後自動退回 App；Capacitor 推送 `bankAutomationProgress`（%）；連線頁／建立精靈顯示進度條。
+
 ## v1.6.29
 - 銀行同步建立精靈：第一銀行／華南改 radio + label 選取，修正 Android 點卡片無法切換 provider。
 

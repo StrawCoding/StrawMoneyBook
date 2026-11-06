@@ -32,8 +32,20 @@ const providerRegistrySource = read('src/services/bank-sync/provider-registry.js
 test('bank automation activity uses desktop viewport and orchestrator dispatch', () => {
   assert.match(bankAutomationActivitySource, /DESKTOP_VIEWPORT_WIDTH = 1280/)
   assert.match(bankAutomationActivitySource, /BankSyncOrchestrator\.connect/)
+  assert.match(bankAutomationActivitySource, /moveTaskToBack/)
   assert.doesNotMatch(bankAutomationActivitySource, /FirstBankAutomation/)
   assert.doesNotMatch(bankAutomationActivitySource, /first_bank_tw/)
+})
+
+test('bank automation emits progress events for background sync UI', () => {
+  const pluginSource = read('android/app/src/main/java/com/strawcoding/strawmoneybook/BankAutomationPlugin.java')
+  const bridgeSource = read('android/app/src/main/java/com/strawcoding/strawmoneybook/core/BankAutomationProgressBridge.java')
+  const nativeAutomationSource = read('src/services/bank-sync/native-automation.js')
+  assert.match(pluginSource, /bankAutomationProgress/)
+  assert.match(pluginSource, /setKeepAlive\(true\)/)
+  assert.match(bridgeSource, /BankAutomationProgressBridge/)
+  assert.match(huaNanBankAutomationSource, /BankAutomationProgressTracker/)
+  assert.match(nativeAutomationSource, /addListener\('bankAutomationProgress'/)
 })
 
 test('Architecture B modular registry registers hua nan and first bank', () => {

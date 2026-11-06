@@ -95,6 +95,30 @@ public final class BankAutomationRuntime {
             }
             debugTrace.record("runtime_phase", "ok", "phase=" + next.name(), details);
         }
+        reportProgressForPhase(next);
+    }
+
+    public void reportProgress(int percent, String stage, String message) {
+        String action = phase == Phase.SYNCING_TRANSACTIONS ? "sync_bank" : "connect_bank";
+        BankAutomationProgressBridge.report(action, providerId, percent, stage, message);
+    }
+
+    private void reportProgressForPhase(Phase next) {
+        int percent;
+        switch (next) {
+            case LOADING_LOGIN -> percent = 8;
+            case CAPTCHA -> percent = 22;
+            case AUTHENTICATING -> percent = 42;
+            case DISCOVERING_ACCOUNTS -> percent = 68;
+            case SYNCING_TRANSACTIONS -> percent = 12;
+            case PARTIAL_SUCCESS, SUCCESS -> percent = 100;
+            case USER_INTERACTION_REQUIRED -> percent = 30;
+            case FAILED, ABORTED -> percent = 0;
+            default -> percent = 5;
+        }
+        if (percent > 0) {
+            reportProgress(percent, next.name().toLowerCase(), "");
+        }
     }
 
     public synchronized void markUserInteractionRequired(String code, String message) {

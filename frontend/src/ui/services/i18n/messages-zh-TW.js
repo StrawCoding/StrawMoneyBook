@@ -624,6 +624,8 @@ export const MESSAGES_ZH_TW = {
     'settings_bank_sync.actions.review': '檢視待匯入',
     'settings_bank_sync.actions.sync_now': '立即同步',
     'settings_bank_sync.actions.syncing': '同步中...',
+    'settings_bank_sync.progress.percent': '同步進度 {percent}%',
+    'settings_bank_sync.progress.background_hint': '同步在背景執行，可返回 App 其他頁面；完成後會通知結果。',
     'settings_bank_sync.actions.disconnect': '中斷連線',
     'settings_bank_sync.actions.disconnecting': '中斷中...',
     'settings_bank_sync.actions.delete': '刪除連線',

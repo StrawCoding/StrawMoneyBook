@@ -122,10 +122,16 @@
           <p class="muted">{{ captchaManualRequiredMessage }}</p>
         </article>
 
+        <BankSyncProgressBar
+          v-if="bankSyncProgress.active"
+          :active="bankSyncProgress.active"
+          :percent="bankSyncProgress.percent"
+        />
         <article v-if="progressText" class="progress-panel">
           <strong>{{ progressText }}</strong>
           <small class="muted">{{ t('settings_bank_sync_create.discovery_hint') }}</small>
         </article>
+        <p v-if="bankSyncProgress.active" class="muted compact">{{ t('settings_bank_sync.progress.background_hint') }}</p>
 
         <div class="row action-row">
           <button class="btn" :disabled="submitting" @click="goToStep(1)">{{ t('settings_bank_sync_create.wizard.back') }}</button>
@@ -161,9 +167,14 @@
 
       <article v-else-if="currentStep === 4" class="card panel">
         <p class="muted">{{ t('settings_bank_sync_create.wizard.syncing_first') }}</p>
+        <BankSyncProgressBar
+          :active="bankSyncProgress.active || submitting || savingAccounts"
+          :percent="bankSyncProgress.active ? bankSyncProgress.percent : (savingAccounts ? 5 : 0)"
+        />
         <article v-if="progressText" class="progress-panel">
           <strong>{{ progressText }}</strong>
         </article>
+        <p v-if="bankSyncProgress.active" class="muted compact">{{ t('settings_bank_sync.progress.background_hint') }}</p>
       </article>
     </template>
 
@@ -181,6 +192,7 @@
 </template>
 
 <script setup>
+import BankSyncProgressBar from '@/ui/components/bank-sync/BankSyncProgressBar.vue'
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
@@ -203,6 +215,7 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
+import { getBankSyncProgressSnapshot, subscribeBankSyncProgress } from '@/services/bank-sync/progress.js'
 
 const router = useRouter()
 const ledgerStore = useLedgerStore()
@@ -230,6 +243,8 @@ const pickerMinute = ref(0)
 const membershipTier = ref(getMembershipTierSnapshot())
 const createdConnection = ref(null)
 const accountDrafts = ref([])
+const bankSyncProgress = ref(getBankSyncProgressSnapshot())
+let unsubscribeBankSyncProgress = null
 
 function defaultInitialSyncStartDate() {
   const date = new Date()
@@ -340,6 +355,9 @@ onMounted(async () => {
   unsubscribeMembership = subscribeMembershipSnapshot((next) => {
     membershipTier.value = String(next?.tier ?? getMembershipTierSnapshot())
   }, { emitCurrent: true })
+  unsubscribeBankSyncProgress = subscribeBankSyncProgress((snapshot) => {
+    bankSyncProgress.value = snapshot
+  })
   if (!form.providerId) {
     form.providerId = providerOptions.value[0]?.value ?? ''
   }
@@ -419,6 +437,9 @@ let unsubscribeMembership = null
 onBeforeUnmount(() => {
   if (typeof unsubscribeMembership === 'function') {
     unsubscribeMembership()
+  }
+  if (typeof unsubscribeBankSyncProgress === 'function') {
+    unsubscribeBankSyncProgress()
   }
   try {
     if (window.__SMB_PLAYWRIGHT_BANK_SYNC_CREATE__) delete window.__SMB_PLAYWRIGHT_BANK_SYNC_CREATE__

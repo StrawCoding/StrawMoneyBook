@@ -41,6 +41,17 @@
           <li v-if="connection.last_error"><span class="muted">{{ t('settings_bank_sync.meta.error') }}</span><strong>{{ connection.last_error }}</strong></li>
         </ul>
 
+        <BankSyncProgressBar
+          v-if="syncingConnectionId === connection.id && bankSyncProgress.active"
+          :active="bankSyncProgress.active"
+          :percent="bankSyncProgress.percent"
+        />
+        <p
+          v-if="syncingConnectionId === connection.id && bankSyncProgress.active"
+          class="muted compact"
+        >
+          {{ t('settings_bank_sync.progress.background_hint') }}
+        </p>
         <div class="row action-row">
           <button
             class="btn primary"
@@ -49,7 +60,7 @@
             :aria-busy="syncingConnectionId === connection.id"
             @click="syncConnection(connection.id)"
           >
-            {{ syncingConnectionId === connection.id ? t('settings_bank_sync.actions.syncing') : t('settings_bank_sync.actions.sync_now') }}
+            {{ syncNowButtonLabel(connection.id) }}
           </button>
           <button
             class="btn"
@@ -265,6 +276,7 @@
 </template>
 
 <script setup>
+import BankSyncProgressBar from '@/ui/components/bank-sync/BankSyncProgressBar.vue'
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -291,6 +303,7 @@ import {
   syncBankConnectionNow,
 } from '@/ui/services/bank-sync.service'
 import { getBankSyncApiUnavailableMessage } from '@/services/bank-sync/backend'
+import { getBankSyncProgressSnapshot, subscribeBankSyncProgress } from '@/services/bank-sync/progress.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -303,6 +316,8 @@ const uiStore = useUiStore()
 const connection = ref(null)
 const loadingState = ref(false)
 const syncingConnectionId = ref('')
+const bankSyncProgress = ref(getBankSyncProgressSnapshot())
+let unsubscribeBankSyncProgress = null
 const disconnectingConnectionId = ref('')
 const savingAccountId = ref('')
 const savingAllAccounts = ref(false)
@@ -449,6 +464,16 @@ async function loadConnection({ loadReviewAfter = true } = {}) {
   } finally {
     loadingState.value = false
   }
+}
+
+function syncNowButtonLabel(connectionId) {
+  if (syncingConnectionId.value !== connectionId) {
+    return t('settings_bank_sync.actions.sync_now')
+  }
+  if (bankSyncProgress.value.active && bankSyncProgress.value.percent > 0) {
+    return t('settings_bank_sync.progress.percent', { percent: bankSyncProgress.value.percent })
+  }
+  return t('settings_bank_sync.actions.syncing')
 }
 
 async function syncConnection(connectionId) {
@@ -726,6 +751,9 @@ onMounted(() => {
   unsubscribeMembership = subscribeMembershipSnapshot((next) => {
     membershipTier.value = String(next?.tier ?? getMembershipTierSnapshot())
   }, { emitCurrent: true })
+  unsubscribeBankSyncProgress = subscribeBankSyncProgress((snapshot) => {
+    bankSyncProgress.value = snapshot
+  })
   void loadConnection()
   try {
     if (localStorage.getItem('straw.playwright.hooks') === '1') {
@@ -771,6 +799,9 @@ let unsubscribeMembership = null
 onBeforeUnmount(() => {
   if (typeof unsubscribeMembership === 'function') {
     unsubscribeMembership()
+  }
+  if (typeof unsubscribeBankSyncProgress === 'function') {
+    unsubscribeBankSyncProgress()
   }
   try {
     if (window.__SMB_PLAYWRIGHT_BANK_SYNC_CONNECTION__) delete window.__SMB_PLAYWRIGHT_BANK_SYNC_CONNECTION__

@@ -629,6 +629,8 @@ export const MESSAGES_EN = {
     'settings_bank_sync.actions.review': 'Review Pending',
     'settings_bank_sync.actions.sync_now': 'Sync Now',
     'settings_bank_sync.actions.syncing': 'Syncing...',
+    'settings_bank_sync.progress.percent': 'Sync progress {percent}%',
+    'settings_bank_sync.progress.background_hint': 'Sync runs in the background; you can leave this screen. You will be notified when it finishes.',
     'settings_bank_sync.actions.disconnect': 'Disconnect',
     'settings_bank_sync.actions.disconnecting': 'Disconnecting...',
     'settings_bank_sync.actions.delete': 'Delete Connection',

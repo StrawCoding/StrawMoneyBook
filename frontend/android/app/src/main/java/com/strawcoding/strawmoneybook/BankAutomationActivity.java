@@ -144,6 +144,16 @@ public class BankAutomationActivity extends Activity {
         timeoutRunnable = () -> finishWithError(new BankAutomationException("bank_automation_timeout", "Bank automation timed out"));
         mainHandler.postDelayed(timeoutRunnable, timeoutMs);
 
+        if (ACTION_SYNC_BANK.equals(action) || ACTION_CONNECT_BANK.equals(action)) {
+            mainHandler.postDelayed(() -> {
+                try {
+                    moveTaskToBack(true);
+                } catch (Exception ignored) {
+                    // Best-effort: return user to the main app while automation runs.
+                }
+            }, 450L);
+        }
+
         executorService.execute(() -> runAction(action, payload));
     }
 

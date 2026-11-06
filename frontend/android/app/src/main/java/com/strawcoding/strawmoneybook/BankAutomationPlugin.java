@@ -11,12 +11,26 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.strawcoding.strawmoneybook.core.BankAutomationProgressBridge;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
 @CapacitorPlugin(name = "BankAutomation")
 public class BankAutomationPlugin extends Plugin {
+    @Override
+    public void load() {
+        super.load();
+        BankAutomationProgressBridge.setEmitter((action, providerId, percent, stage, message) -> {
+            JSObject payload = new JSObject();
+            payload.put("action", action);
+            payload.put("providerId", providerId);
+            payload.put("percent", percent);
+            payload.put("stage", stage);
+            payload.put("message", message);
+            notifyListeners("bankAutomationProgress", payload);
+        });
+    }
     @PluginMethod
     public void isAvailable(PluginCall call) {
         JSObject result = new JSObject();
@@ -66,6 +80,8 @@ public class BankAutomationPlugin extends Plugin {
             call.reject("Bank automation is already running", "bank_automation_busy");
             return;
         }
+
+        call.setKeepAlive(true);
 
         Intent intent = new Intent(activity, BankAutomationActivity.class);
         intent.putExtra(BankAutomationActivity.EXTRA_ACTION, action);

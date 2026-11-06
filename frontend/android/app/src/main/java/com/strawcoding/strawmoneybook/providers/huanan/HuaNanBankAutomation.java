@@ -4,6 +4,7 @@ import com.strawcoding.strawmoneybook.BankAutomationDebugTrace;
 import com.strawcoding.strawmoneybook.BankAutomationException;
 import com.strawcoding.strawmoneybook.BankAutomationVault;
 import com.strawcoding.strawmoneybook.TesseractBridge;
+import com.strawcoding.strawmoneybook.core.BankAutomationProgressTracker;
 import com.strawcoding.strawmoneybook.core.BankAutomationRuntime;
 import com.strawcoding.strawmoneybook.core.BankAutomationSyncContract;
 
@@ -249,6 +250,27 @@ public final class HuaNanBankAutomation {
             }
             bootstrapSyncSession(activity, session, debugTrace, runtime, state);
 
+            BankAutomationProgressTracker progressTracker = new BankAutomationProgressTracker("sync_bank", PROVIDER_ID);
+            int totalWindows = 0;
+            for (int previewIndex = 0; previewIndex < accountIds.length(); previewIndex += 1) {
+                String previewAccountId = normalizeAccountId(accountIds.optString(previewIndex));
+                if (previewAccountId.isEmpty()) continue;
+                String previewWatermark = BankAutomationSyncContract.resolveAccountWatermark(
+                    accountWatermarks,
+                    previewAccountId,
+                    connectionWatermark
+                );
+                LocalDate previewStart = BankSyncContract.resolveQueryStartDate(
+                    initialSyncStartDate,
+                    previewWatermark,
+                    cursor,
+                    lookbackDays
+                );
+                totalWindows += splitInquiryWindows(previewStart, endDate).size();
+            }
+            progressTracker.setTotalUnits(Math.max(1, totalWindows));
+            progressTracker.reportPhase("sync_bootstrap", "", 8);
+
             JSONArray added = new JSONArray();
             JSONArray accountResults = new JSONArray();
             boolean reloginAttempted = false;
@@ -366,6 +388,7 @@ public final class HuaNanBankAutomation {
                                 added.put(rows.getJSONObject(rowIndex));
                                 accountRowCount += 1;
                             }
+                            progressTracker.completeWindow("sync_window", maskAccountId(accountId));
                         }
                         if (retryAccount) continue;
                         accountResults.put(buildAccountSyncResult(
@@ -419,6 +442,7 @@ public final class HuaNanBankAutomation {
 
             boolean partial = "partial".equals(aggregateStatus) || "partial_success".equals(aggregateStatus);
             runtime.markSuccess(partial);
+            progressTracker.completeSuccess();
             JSONObject result = new JSONObject();
             result.put("provider", PROVIDER_ID);
             result.put("added", deduped);
