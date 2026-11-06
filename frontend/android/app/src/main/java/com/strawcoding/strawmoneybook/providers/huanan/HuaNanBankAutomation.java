@@ -1630,7 +1630,8 @@ public final class HuaNanBankAutomation {
     }
 
     /**
-     * 華南活存：簽章金融卡消費常另有一列「金融卡交易立即扣款／簽帳扣」自活存扣款，與消費列重複，略過。
+     * 華南活存：簽章／金融卡簽帳消費需「事先扣款」，明細會多一列活存「簽帳扣」（金融卡交易立即扣款）。
+     * 該列與「簽章金融卡交易」消費列同一筆；匯入會造成記帳二次扣款，故略過簽帳扣列、保留消費列。
      */
     static boolean shouldIgnorePortalTransaction(JSONObject row) {
         if (row == null) {

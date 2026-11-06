@@ -83,7 +83,10 @@ export function buildNativeVaultLookupIds(connection = {}) {
   }
 }
 
-/** 華南活存 CSV／待匯入列：金融卡「簽帳扣」結清算列略過（與 Android 解析一致） */
+/**
+ * 華南活存 CSV／待匯入：簽帳消費的事先扣款列（簽帳扣／金融卡交易立即扣款）略過，避免與簽章金融卡交易列重複記帳。
+ * 與 Android {@code shouldIgnorePortalTransaction} 一致。
+ */
 export function shouldIgnoreHuaNanImportedRow(row = {}) {
   const blob = [
     row?.summary,
