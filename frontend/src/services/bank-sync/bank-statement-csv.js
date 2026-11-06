@@ -1,4 +1,4 @@
-import { simpleHash } from './shared.js'
+import { isHuaNanBankProviderId, shouldIgnoreHuaNanImportedRow, simpleHash } from './shared.js'
 
 function normalizeText(value) {
   return String(value ?? '').trim()
@@ -106,6 +106,8 @@ export function detectBankStatementCsvFormat(csvText) {
 
 export function parseBankStatementCsv(csvText, options = {}) {
   const providerAccountId = normalizeText(options.providerAccountId)
+  const providerId = normalizeText(options.provider)
+  const filterHuaNanRows = isHuaNanBankProviderId(providerId)
   if (!providerAccountId) {
     throw new Error('providerAccountId is required for bank statement CSV import')
   }
@@ -138,6 +140,17 @@ export function parseBankStatementCsv(csvText, options = {}) {
     const transactionType = normalizeText(row[typeCol])
     const note = normalizeText(row[noteCol])
     const statusText = normalizeText(row[statusCol]) || '正常'
+    if (filterHuaNanRows) {
+      const rowBlob = Object.values(row).map((value) => normalizeText(value)).filter(Boolean).join(' ')
+      if (shouldIgnoreHuaNanImportedRow({
+        summary,
+        transactionType,
+        note,
+        description: rowBlob,
+      })) {
+        continue
+      }
+    }
     const sourceText = `${providerAccountId}|${postedAtText}|${summary}|${amountMinor}|${balanceMinor}`
     const providerTransactionId = `fbcsv_${simpleHash(sourceText)}`
 

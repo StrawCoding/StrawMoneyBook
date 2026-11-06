@@ -2,6 +2,7 @@ package com.strawcoding.strawmoneybook.providers.huanan;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.json.JSONObject;
@@ -44,6 +45,42 @@ public class HuaNanBankAutomationParseTest {
         );
         assertNotNull(item);
         assertEquals(-401500L, item.getLong("amountMinor"));
+    }
+
+    @Test
+    public void ignoresDebitCardSignatureChargeSettlementRow() throws Exception {
+        JSONObject row = new JSONObject();
+        row.put("postedAt", "115/08/16");
+        row.put("withdraw", "350");
+        row.put("deposit", "");
+        row.put("summary", "金融卡交易立即扣款");
+        row.put("cells", new org.json.JSONArray().put("115/08/16").put("金融卡交易立即扣款").put("簽帳扣").put("350"));
+
+        JSONObject item = HuaNanBankAutomation.buildTransactionIdentity(
+            "123456789012",
+            row,
+            "2026-08-01",
+            "2026-08-16"
+        );
+        assertNull(item);
+    }
+
+    @Test
+    public void keepsSignatureDebitCardMerchantRow() throws Exception {
+        JSONObject row = new JSONObject();
+        row.put("postedAt", "115/08/16");
+        row.put("withdraw", "350");
+        row.put("deposit", "");
+        row.put("summary", "簽章金融卡交易 統一超商");
+
+        JSONObject item = HuaNanBankAutomation.buildTransactionIdentity(
+            "123456789012",
+            row,
+            "2026-08-01",
+            "2026-08-16"
+        );
+        assertNotNull(item);
+        assertEquals(-35000L, item.getLong("amountMinor"));
     }
 
     @Test

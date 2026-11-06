@@ -83,6 +83,22 @@ export function buildNativeVaultLookupIds(connection = {}) {
   }
 }
 
+/** 華南活存 CSV／待匯入列：金融卡「簽帳扣」結清算列略過（與 Android 解析一致） */
+export function shouldIgnoreHuaNanImportedRow(row = {}) {
+  const blob = [
+    row?.summary,
+    row?.description,
+    row?.note,
+    row?.transaction_type,
+    row?.transactionType,
+  ]
+    .map((value) => normalizeText(value))
+    .filter(Boolean)
+    .join(' ')
+  if (!blob.includes('簽帳扣')) return false
+  return blob.includes('金融卡') || blob.includes('簽章')
+}
+
 export function buildImportedNoteParts(row = {}) {
   const transactionType = normalizeText(row?.transaction_type ?? row?.transactionType)
   const summary = normalizeText(row?.summary)

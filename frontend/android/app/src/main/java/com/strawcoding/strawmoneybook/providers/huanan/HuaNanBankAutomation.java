@@ -1630,6 +1630,42 @@ public final class HuaNanBankAutomation {
     }
 
     /**
+     * 華南活存：簽章金融卡消費常另有一列「金融卡交易立即扣款／簽帳扣」自活存扣款，與消費列重複，略過。
+     */
+    static boolean shouldIgnorePortalTransaction(JSONObject row) {
+        if (row == null) {
+            return false;
+        }
+        StringBuilder blob = new StringBuilder();
+        appendPortalRowText(blob, row.optString("summary"));
+        appendPortalRowText(blob, row.optString("摘要"));
+        appendPortalRowText(blob, row.optString("description"));
+        appendPortalRowText(blob, row.optString("note"));
+        JSONArray cells = row.optJSONArray("cells");
+        if (cells != null) {
+            for (int index = 0; index < cells.length(); index += 1) {
+                appendPortalRowText(blob, cells.optString(index));
+            }
+        }
+        String normalized = normalizeText(blob.toString());
+        if (normalized.isEmpty() || !normalized.contains("簽帳扣")) {
+            return false;
+        }
+        return normalized.contains("金融卡") || normalized.contains("簽章");
+    }
+
+    private static void appendPortalRowText(StringBuilder blob, String value) {
+        String normalized = normalizeText(value);
+        if (normalized.isEmpty()) {
+            return;
+        }
+        if (blob.length() > 0) {
+            blob.append(' ');
+        }
+        blob.append(normalized);
+    }
+
+    /**
      * Prefer portal ref/seq; else {@code hncb_} + hash(account|postedAt|amount|summary). Never include balance.
      * Occurrence index 0 keeps v1 hash so existing rows are not rehashed (SYNC-01).
      */
@@ -1649,6 +1685,9 @@ public final class HuaNanBankAutomation {
         String rangeEnd,
         Map<String, Integer> occurrenceByKey
     ) throws Exception {
+        if (shouldIgnorePortalTransaction(row)) {
+            return null;
+        }
         String postedAtText = firstNonEmpty(row.optString("postedAt"), row.optString("date"), row.optString("交易日"));
         String summary = firstNonEmpty(row.optString("summary"), row.optString("摘要"), row.optString("description"));
         long amountMinor = resolveTransactionAmountMinor(row);
