@@ -10,6 +10,10 @@
       <header class="row">
         <h3>{{ t('common.asset_accounts') }}</h3>
         <div class="header-actions">
+          <label class="show-archived-toggle">
+            <input v-model="showArchivedAccounts" type="checkbox" data-testid="account-show-archived" />
+            <span>{{ t('account.show_archived') }}</span>
+          </label>
           <button class="btn mini-btn" @click="addAccountFromHeader">{{ t('common.add_account') }}</button>
           <button class="btn mini-btn" @click="addGroup">{{ t('common.add_group') }}</button>
         </div>
@@ -75,6 +79,32 @@
           </transition>
         </li>
       </ul>
+
+      <section v-if="showArchivedAccounts && archivedAccountRows.length" class="archived-section" data-testid="account-archived-section">
+        <h4>{{ t('account.archived_section_title') }}</h4>
+        <p class="muted compact">{{ t('account.archived_section_hint') }}</p>
+        <ul class="archived-list">
+          <li v-for="account in archivedAccountRows" :key="account.id" class="archived-row">
+            <RouterLink
+              :to="{ name: 'account-detail', params: { id: account.id } }"
+              class="archived-link"
+            >
+              <font-awesome-icon v-if="account.icon" :icon="account.icon" class="account-icon" />
+              <span>{{ account.name }}</span>
+              <span class="archived-badge">{{ t('account.archived_badge') }}</span>
+            </RouterLink>
+            <button
+              type="button"
+              class="btn mini-btn"
+              data-testid="account-restore-btn"
+              :disabled="restoringAccountId === account.id"
+              @click="restoreArchivedAccount(account.id)"
+            >
+              {{ restoringAccountId === account.id ? t('common.processing') : t('account.restore_account') }}
+            </button>
+          </li>
+        </ul>
+      </section>
     </section>
 
     <AppDialog
@@ -184,7 +214,7 @@
 
 <script setup>
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import draggable from 'vuedraggable'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
@@ -220,6 +250,18 @@ const accountItemsMap = ref({})
 const expandedGroupIds = ref(new Set())
 const expandedInitialized = ref(false)
 const expandedStateStorageKey = 'asset-account-management:expanded-group-ids'
+const showArchivedAccounts = ref(false)
+const restoringAccountId = ref('')
+
+onMounted(async () => {
+  await accountStore.load({ includeArchived: showArchivedAccounts.value })
+})
+
+watch(showArchivedAccounts, async (next) => {
+  await accountStore.load({ includeArchived: Boolean(next) })
+})
+
+const archivedAccountRows = computed(() => accountStore.archivedRegularAccounts)
 
 watch(
   () => ledgerStore.activeLedgerId,
@@ -295,6 +337,7 @@ watch(
     for (const account of accounts) {
       // 信用卡不出現在資產母分類管理
       if (String(account?.account_kind ?? '').toLowerCase() === 'credit') continue
+      if (Number(account?.is_archived)) continue
       if (!nextMap[account.group_id]) nextMap[account.group_id] = []
       nextMap[account.group_id].push(account)
     }
@@ -305,6 +348,19 @@ watch(
 
 function accountItemsByGroup(groupId) {
   return accountItemsMap.value[groupId] ?? []
+}
+
+async function restoreArchivedAccount(accountId) {
+  if (!accountId || restoringAccountId.value) return
+  restoringAccountId.value = accountId
+  try {
+    await accountStore.restoreAccount(accountId)
+    uiStore.pushToast(t('account.restore_ok'))
+  } catch (error) {
+    uiStore.pushToast(error.message ?? t('common.restore_failed'), 'error')
+  } finally {
+    restoringAccountId.value = ''
+  }
 }
 
 function isAccountIncludedInAssets(account) {
@@ -600,7 +656,67 @@ h3 {
 .header-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.show-archived-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  user-select: none;
+}
+
+.archived-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+
+.archived-section h4 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.archived-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.archived-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-elevated, rgba(255, 255, 255, 0.04));
+}
+
+.archived-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.archived-badge {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--badge-muted-bg, rgba(128, 128, 128, 0.2));
+  color: var(--text-muted, #888);
+  flex-shrink: 0;
 }
 
 .group-list,

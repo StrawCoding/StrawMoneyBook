@@ -18,6 +18,7 @@ export function buildGroupSummaries(groups = [], accounts = [], balances = [], o
   const rates = options.rates ?? {}
 
   for (const account of accounts ?? []) {
+    if (Number(account?.is_archived)) continue
     // 信用卡不計入資產母分類統計（另有信用卡摘要）
     if (isCreditAccount(account)) continue
     const groupId = account.group_id

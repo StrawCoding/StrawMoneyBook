@@ -17,7 +17,11 @@
         </button>
       </header>
 
-      <template v-if="isEditMode">
+      <p v-if="isAccountArchived" class="archived-banner" data-testid="account-archived-banner">
+        {{ t('account.archived_banner') }}
+      </p>
+
+      <template v-if="isEditMode && !isAccountArchived">
         <label class="field">
           {{ t('common.account_name') }}
           <input v-model="editName" class="input" type="text" maxlength="40" :placeholder="t('common.please_enter_account_name')" />
@@ -109,8 +113,17 @@
         <p v-if="creditLimitInvalid" class="error-text">{{ t('common.credit_limit_invalid') }}</p>
         <p v-if="repaymentReminderDayInvalid" class="error-text">{{ t('common.repay_day_range') }}</p>
         <div class="row action-row">
-          <button class="btn danger" :disabled="deleting" @click="removeAccountRecord">
-            {{ deleting ? t('common.processing') : t('account.delete_archive') }}
+          <button class="btn danger" data-testid="account-archive-btn" :disabled="deleting" @click="openArchiveConfirm">
+            {{ deleting ? t('common.processing') : t('account.archive_account') }}
+          </button>
+        </div>
+      </template>
+
+      <template v-else-if="isEditMode && isAccountArchived">
+        <p class="muted">{{ t('account.archived_edit_hint') }}</p>
+        <div class="row action-row">
+          <button class="btn primary" data-testid="account-restore-btn" :disabled="restoring" @click="restoreAccountRecord">
+            {{ restoring ? t('common.processing') : t('account.restore_account') }}
           </button>
         </div>
       </template>
@@ -241,14 +254,14 @@
     </article>
 
     <AppDialog
-      :open="deleteConfirmOpen"
-      :title="t('common.confirm_delete_archive')"
-      :message="t('account.confirm_delete_name', { name: account?.name ?? '' })"
-      :confirm-text="t('common.confirm_delete')"
+      :open="archiveConfirmOpen"
+      :title="t('account.confirm_archive_title')"
+      :message="t('account.confirm_archive_name', { name: account?.name ?? '' })"
+      :confirm-text="t('account.archive_account')"
       :loading="deleting"
       :loading-text="t('common.processing')"
-      @close="closeDeleteConfirm"
-      @confirm="confirmRemoveAccountRecord"
+      @close="closeArchiveConfirm"
+      @confirm="confirmArchiveAccountRecord"
     />
   </HabitatPageShell>
 </template>
@@ -291,7 +304,8 @@ const refreshing = ref(false)
 const saving = ref(false)
 const iconSaving = ref(false)
 const deleting = ref(false)
-const deleteConfirmOpen = ref(false)
+const archiveConfirmOpen = ref(false)
+const restoring = ref(false)
 const editName = ref('')
 const editGroupId = ref('')
 const editIcon = ref(defaultAccountIcon)
@@ -309,6 +323,7 @@ const initializedAccountId = ref('')
 
 const accountId = computed(() => String(route.params.id ?? ''))
 const account = computed(() => accountStore.accounts.find((item) => item.id === accountId.value) ?? null)
+const isAccountArchived = computed(() => Number(account.value?.is_archived) === 1)
 const isEditMode = computed(() => queryText(route.query.mode) === 'edit')
 const backLink = computed(() => (isEditMode.value ? '/assets/accounts' : '/assets'))
 
@@ -634,34 +649,50 @@ async function saveProfile() {
   }
 }
 
-async function removeAccountRecord() {
-  if (!isEditMode.value || !accountId.value || !account.value) return
-  deleteConfirmOpen.value = true
+function openArchiveConfirm() {
+  if (!isEditMode.value || !accountId.value || !account.value || isAccountArchived.value) return
+  archiveConfirmOpen.value = true
 }
 
-function closeDeleteConfirm() {
+function closeArchiveConfirm() {
   if (deleting.value) return
-  deleteConfirmOpen.value = false
+  archiveConfirmOpen.value = false
 }
 
-async function confirmRemoveAccountRecord() {
+async function confirmArchiveAccountRecord() {
   if (!isEditMode.value || !accountId.value || !account.value) return
   deleting.value = true
   try {
-    await accountStore.removeAccount(accountId.value)
-    uiStore.pushToast(t('common.account_processed'))
-    deleteConfirmOpen.value = false
+    await accountStore.archiveAccount(accountId.value)
+    uiStore.pushToast(t('account.archive_ok'))
+    archiveConfirmOpen.value = false
     await router.push('/assets/accounts')
   } catch (error) {
-    uiStore.pushToast(error.message ?? t('account.delete_failed'), 'error')
+    uiStore.pushToast(error.message ?? t('account.archive_failed'), 'error')
   } finally {
     deleting.value = false
   }
 }
 
+async function restoreAccountRecord() {
+  if (!isEditMode.value || !accountId.value || !account.value || !isAccountArchived.value) return
+  restoring.value = true
+  try {
+    await accountStore.restoreAccount(accountId.value)
+    uiStore.pushToast(t('account.restore_ok'))
+    await router.push({ name: 'account-detail', params: { id: accountId.value }, query: { mode: 'edit' } })
+  } catch (error) {
+    uiStore.pushToast(error.message ?? t('common.restore_failed'), 'error')
+  } finally {
+    restoring.value = false
+  }
+}
+
 onMounted(async () => {
-  if (!accountStore.accounts.length || !accountStore.groups.length) {
-    await accountStore.load()
+  if (!accountStore.groups.length) {
+    await accountStore.load({ includeArchived: true })
+  } else if (accountId.value && !accountStore.accounts.some((item) => item.id === accountId.value)) {
+    await accountStore.load({ includeArchived: true })
   }
   if (!categoryStore.categories.length) {
     await categoryStore.load()
@@ -897,6 +928,15 @@ h3 {
 
 .switch-row.active .switch-thumb {
   transform: translate3d(20px, 0, 0);
+}
+
+.archived-banner {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-elevated, rgba(255, 255, 255, 0.06));
+  color: var(--text-muted, #aaa);
+  font-size: 0.875rem;
 }
 
 .action-row {

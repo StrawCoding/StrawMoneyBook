@@ -15,3 +15,10 @@ test('account store ignores stale concurrent load results', () => {
   assert.match(source, /if \(this\.loadRequestSeq !== requestSeq \|\| useLedgerStore\(\)\.activeLedgerId !== ledgerId\)/)
   assert.match(source, /if \(this\.loadRequestSeq === requestSeq\) \{[\s\S]*this\.loading = false/)
 })
+
+test('account store exposes archive restore and excludes archived from pickers', () => {
+  assert.match(source, /async archiveAccount\(accountId\)/)
+  assert.match(source, /async restoreAccount\(accountId\)/)
+  assert.match(source, /archivedRegularAccounts\(state\)/)
+  assert.match(source, /!Number\(item\.is_archived\)/)
+})

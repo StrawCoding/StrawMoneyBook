@@ -5,6 +5,8 @@ import {
   getAccountBalances,
   createAccountGroup,
   createAccount,
+  archiveAccount as archiveAccountRepo,
+  restoreAccount as restoreAccountRepo,
   deleteAccountGroupIfEmpty,
   deleteAccountIfUnused,
   updateAccountGroupSortOrders,
@@ -37,7 +39,7 @@ function buildGroupedAccounts(groups, accounts, { includeSavings = true, include
     ? [...(accounts ?? [])]
     : (accounts ?? []).filter((account) => !isSavingsJarAccount(account))
 
-  const cashAccounts = filteredAccounts.filter((account) => !isCreditAccount(account))
+  const cashAccounts = filteredAccounts.filter((account) => !isCreditAccount(account) && !Number(account.is_archived))
   const creditAccounts = includeCredit
     ? filteredAccounts.filter((account) => isCreditAccount(account) && !Number(account.is_archived))
     : []
@@ -135,7 +137,11 @@ export const useAccountStore = defineStore('account', {
     },
 
     regularAccounts(state) {
-      return state.accounts.filter((item) => !isSavingsJarAccount(item))
+      return state.accounts.filter((item) => !isSavingsJarAccount(item) && !Number(item.is_archived))
+    },
+
+    archivedRegularAccounts(state) {
+      return state.accounts.filter((item) => !isSavingsJarAccount(item) && Number(item.is_archived) === 1)
     },
 
     savingsJarAccounts(state) {
@@ -211,6 +217,20 @@ export const useAccountStore = defineStore('account', {
     async removeGroup(groupId) {
       const ledgerStore = useLedgerStore()
       await deleteAccountGroupIfEmpty(ledgerStore.activeLedgerId, groupId)
+      await this.load()
+    },
+
+    async archiveAccount(accountId) {
+      const ledgerStore = useLedgerStore()
+      if (!accountId) throw new Error(translateMessage('common.missing_account_id', '缺少帳戶 ID'))
+      await archiveAccountRepo(ledgerStore.activeLedgerId, accountId)
+      await this.load()
+    },
+
+    async restoreAccount(accountId) {
+      const ledgerStore = useLedgerStore()
+      if (!accountId) throw new Error(translateMessage('common.missing_account_id', '缺少帳戶 ID'))
+      await restoreAccountRepo(ledgerStore.activeLedgerId, accountId)
       await this.load()
     },
 
