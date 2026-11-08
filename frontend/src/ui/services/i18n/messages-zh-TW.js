@@ -2231,6 +2231,7 @@ export const MESSAGES_ZH_TW = {
     'home_tx.title': '交易紀錄',
     'home_tx.badge_count': '{month} 共 {count} 筆',
     'home_tx.reimbursable_badge': '報銷',
+    'home_tx.reimbursable_badge_settled': '已報銷',
     'home_tx.empty_this_month': '這個月份沒有交易',
     'home_tx.range_year': '{year} 年',
     'home_tx.range_current': '當月',

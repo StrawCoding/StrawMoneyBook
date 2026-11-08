@@ -1,15 +1,16 @@
 <template>
   <span
-    v-if="visible"
+    v-if="variant"
     class="tx-reimbursable-badge"
+    :class="{ 'tx-reimbursable-badge--settled': variant === 'settled' }"
     data-testid="tx-reimbursable-badge"
-  >{{ t('home_tx.reimbursable_badge') }}</span>
+  >{{ label }}</span>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 import { useI18n } from '@/ui/services/i18n.service'
-import { isPendingReimbursableTransaction } from '@/ui/utils/reimbursable-transaction'
+import { reimbursableTransactionBadgeVariant } from '@/ui/utils/reimbursable-transaction'
 
 const props = defineProps({
   tx: {
@@ -19,5 +20,10 @@ const props = defineProps({
 })
 
 const { t } = useI18n()
-const visible = computed(() => isPendingReimbursableTransaction(props.tx))
+const variant = computed(() => reimbursableTransactionBadgeVariant(props.tx))
+const label = computed(() => (
+  variant.value === 'settled'
+    ? t('home_tx.reimbursable_badge_settled')
+    : t('home_tx.reimbursable_badge')
+))
 </script>

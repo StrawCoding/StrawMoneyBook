@@ -3,27 +3,40 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { isPendingReimbursableTransaction } from '../src/ui/utils/reimbursable-transaction.js'
+import {
+  isPendingReimbursableTransaction,
+  isReimbursableExpenseTransaction,
+  readReimbursableFlag,
+  reimbursableTransactionBadgeVariant,
+} from '../src/ui/utils/reimbursable-transaction.js'
 
-test('flags pending reimbursable expense rows', () => {
+test('reads reimbursable flag from snake_case or camelCase', () => {
+  assert.equal(readReimbursableFlag({ is_reimbursable: 1 }), true)
+  assert.equal(readReimbursableFlag({ isReimbursable: true }), true)
+  assert.equal(readReimbursableFlag({ is_reimbursable: '1' }), true)
+  assert.equal(readReimbursableFlag({ is_reimbursable: 0 }), false)
+})
+
+test('pending reimbursable expense shows green badge variant', () => {
   const tx = { type: 'expense', is_reimbursable: 1, reimbursement_state: 'pending' }
+  assert.equal(reimbursableTransactionBadgeVariant(tx), 'pending')
   assert.equal(isPendingReimbursableTransaction(tx), true)
+  assert.equal(isReimbursableExpenseTransaction(tx), true)
 })
 
-test('skips income, non-reimbursable, and reimbursed', () => {
-  assert.equal(isPendingReimbursableTransaction({ type: 'income', is_reimbursable: 1 }), false)
-  assert.equal(isPendingReimbursableTransaction({ type: 'expense', is_reimbursable: 0 }), false)
-  assert.equal(
-    isPendingReimbursableTransaction({
-      type: 'expense',
-      is_reimbursable: 1,
-      reimbursement_state: 'reimbursed',
-    }),
-    false,
-  )
+test('settled reimbursable expense still shows settled badge', () => {
+  const tx = { type: 'expense', is_reimbursable: 1, reimbursement_state: 'reimbursed' }
+  assert.equal(reimbursableTransactionBadgeVariant(tx), 'settled')
+  assert.equal(isPendingReimbursableTransaction(tx), false)
+  assert.equal(isReimbursableExpenseTransaction(tx), true)
 })
 
-test('home feed renders green reimbursable badge component', () => {
+test('skips income and non-reimbursable', () => {
+  assert.equal(reimbursableTransactionBadgeVariant({ type: 'income', is_reimbursable: 1 }), null)
+  assert.equal(reimbursableTransactionBadgeVariant({ type: 'expense', is_reimbursable: 0 }), null)
+})
+
+test('home feed renders reimbursable badge component', () => {
   const src = readFileSync(
     resolve('src/ui/components/home/HomeTransactionFeed.vue'),
     'utf8',

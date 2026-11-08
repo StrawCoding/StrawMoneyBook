@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- 交易列表：可報銷標籤改為凡 `is_reimbursable` 支出皆顯示（待報銷綠色「報銷」、已入帳灰色「已報銷」）；修正欄位讀取。
+
 ---
 
 ## v1.6.37
