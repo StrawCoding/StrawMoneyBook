@@ -125,9 +125,18 @@ export function buildClaimSheetImportedDraftTx(item) {
   }
 }
 
+export function resolveClaimImportAmountManualOverride(tx, amountMinor) {
+  const normalized = Math.max(0, Math.round(Number(amountMinor ?? 0)))
+  const autoMinor = claimSheetImportedMaxAmountMinor(tx)
+  return normalized !== autoMinor
+}
+
 export function buildClaimSheetImportedClaimItem(tx, t, options = {}) {
   const kind = claimSheetImportKindFromTx(tx)
   const amountMinor = resolveClaimSheetImportedAmountMinor(tx, options.amountMinor ?? null)
+  const amountManualOverride = options.amountManualOverride !== undefined
+    ? Boolean(options.amountManualOverride)
+    : resolveClaimImportAmountManualOverride(tx, amountMinor)
   return {
     entryType: claimSheetImportedEntryType(tx),
     sourceType: 'transaction',
@@ -136,6 +145,7 @@ export function buildClaimSheetImportedClaimItem(tx, t, options = {}) {
     accountId: tx?.account_id ?? null,
     description: claimSheetImportedTitle(tx, t),
     amountMinor,
+    amountManualOverride,
     occurredAt: tx?.occurred_at,
     claimImportKind: kind,
   }

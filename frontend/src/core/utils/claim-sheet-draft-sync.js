@@ -40,6 +40,11 @@ export function resolveReimbursementImportSync(tx) {
   }
 }
 
+export function isClaimImportAmountLocked(item) {
+  if (!isReimbursementImportClaimItem(item)) return false
+  return Boolean(Number(item?.amount_manual_override ?? item?.amountManualOverride ?? 0))
+}
+
 export function shouldSyncDraftClaimItem(item, tx) {
   const sync = resolveReimbursementImportSync(tx)
   if (sync.action === 'remove') return { shouldRemove: true, shouldUpdate: false, sync }
@@ -49,9 +54,10 @@ export function shouldSyncDraftClaimItem(item, tx) {
 
   const currentAmount = Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
   const currentDescription = String(item?.description ?? '').trim()
-  const maxAmount = sync.amountMinor
-  const nextAmount = Math.min(currentAmount, maxAmount)
-  const shouldUpdate = nextAmount !== currentAmount || currentDescription !== sync.description
+  const amountLocked = isClaimImportAmountLocked(item)
+  const nextAmount = amountLocked ? currentAmount : sync.amountMinor
+  const shouldUpdate = (!amountLocked && nextAmount !== currentAmount)
+    || currentDescription !== sync.description
   return {
     shouldRemove: false,
     shouldUpdate,

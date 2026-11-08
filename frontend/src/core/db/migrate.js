@@ -48,6 +48,7 @@ import migration047 from '@/core/db/migrations/047_restore_deleted_log_triggers.
 import migration048 from '@/core/db/migrations/048_soft_delete_transaction_postings.sql?raw'
 import migration049 from '@/core/db/migrations/049_budget_container_surplus_mode.sql?raw'
 import migration050 from '@/core/db/migrations/050_claim_sheet_payments.sql?raw'
+import migration051 from '@/core/db/migrations/051_reimbursement_item_amount_manual.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 import {
   assertNoReservedMigrationVersions,
@@ -107,6 +108,7 @@ const MIGRATIONS = [
   { version: 48, name: 'soft_delete_transaction_postings', sql: migration048 },
   { version: 49, name: 'budget_container_surplus_mode', sql: migration049 },
   { version: 50, name: 'claim_sheet_payments', sql: migration050 },
+  { version: 51, name: 'reimbursement_item_amount_manual', sql: migration051 },
 ]
 
 assertNoReservedMigrationVersions(MIGRATIONS)

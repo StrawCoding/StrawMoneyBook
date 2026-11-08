@@ -521,6 +521,7 @@ async function replaceReimbursementItems(ledgerId, reimbursementId, items = []) 
       accountId: item.accountId ?? null,
       description: item.description ?? `明細 ${index + 1}`,
       amountMinor,
+      amountManualOverride: Boolean(item.amountManualOverride),
       occurredAt: item.occurredAt ?? nowIso(),
     })
   }

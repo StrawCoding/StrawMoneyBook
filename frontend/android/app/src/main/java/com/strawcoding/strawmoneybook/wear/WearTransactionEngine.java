@@ -1328,7 +1328,9 @@ public final class WearTransactionEngine {
                 deleteReimbursementItem(db, ledgerId, item.id);
                 continue;
             }
-            long nextAmount = Math.min(Math.max(0L, item.amountMinor), decision.pendingMinor);
+            long nextAmount = item.amountManualOverride
+                ? Math.max(0L, item.amountMinor)
+                : decision.pendingMinor;
             String nextDescription = decision.description == null || decision.description.isEmpty()
                 ? item.description
                 : decision.description;
@@ -1363,6 +1365,7 @@ public final class WearTransactionEngine {
         final String entryType;
         final String description;
         final long amountMinor;
+        final boolean amountManualOverride;
 
         DraftClaimItem(
             String id,
@@ -1370,7 +1373,8 @@ public final class WearTransactionEngine {
             String sourceType,
             String entryType,
             String description,
-            long amountMinor
+            long amountMinor,
+            boolean amountManualOverride
         ) {
             this.id = id;
             this.reimbursementId = reimbursementId;
@@ -1378,6 +1382,7 @@ public final class WearTransactionEngine {
             this.entryType = entryType;
             this.description = description;
             this.amountMinor = amountMinor;
+            this.amountManualOverride = amountManualOverride;
         }
     }
 
@@ -1399,12 +1404,17 @@ public final class WearTransactionEngine {
         String txId
     ) {
         List<DraftClaimItem> items = new ArrayList<>();
+        boolean hasAmountManualOverride = columnExists(db, "reimbursement_items", "amount_manual_override");
+        String amountManualSelect = hasAmountManualOverride
+            ? " COALESCE(ri.amount_manual_override, 0) AS amount_manual_override"
+            : " 0 AS amount_manual_override";
         Cursor cursor = db.query(
             "SELECT ri.id, ri.reimbursement_id,"
                 + " COALESCE(ri.source_type, '') AS source_type,"
                 + " COALESCE(ri.entry_type, 'expense') AS entry_type,"
                 + " COALESCE(ri.description, '') AS description,"
-                + " COALESCE(ri.amount_minor, 0) AS amount_minor"
+                + " COALESCE(ri.amount_minor, 0) AS amount_minor,"
+                + "," + amountManualSelect
                 + " FROM reimbursement_items ri"
                 + " INNER JOIN reimbursements r"
                 + "   ON r.ledger_id = ri.ledger_id AND r.id = ri.reimbursement_id"
@@ -1422,7 +1432,8 @@ public final class WearTransactionEngine {
                     cursor.getString(2),
                     cursor.getString(3),
                     cursor.getString(4),
-                    cursor.getLong(5)
+                    cursor.getLong(5),
+                    cursor.getLong(6) == 1L
                 ));
             }
         } finally {

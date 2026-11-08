@@ -138,6 +138,7 @@ export async function listReimbursementItems(ledgerId, reimbursementId) {
        i.account_id,
        i.description,
        i.amount_minor,
+       i.amount_manual_override,
        i.settled_minor,
        i.occurred_at,
        i.attachment_uri,
@@ -166,8 +167,8 @@ export async function createReimbursementItem(ledgerId, input) {
     `INSERT INTO reimbursement_items (
       ledger_id, id, reimbursement_id, source_type, transaction_id,
       entry_type, category_id, account_id, description, amount_minor,
-      occurred_at, attachment_uri, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      amount_manual_override, occurred_at, attachment_uri, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     [
       ledgerId,
       id,
@@ -179,6 +180,7 @@ export async function createReimbursementItem(ledgerId, input) {
       input.accountId ?? null,
       input.description ?? null,
       input.amountMinor,
+      input.amountManualOverride ? 1 : 0,
       input.occurredAt,
       input.attachmentUri ?? null,
       now,
@@ -218,6 +220,7 @@ export async function listDraftTransactionImportItemsByTransactionIds(ledgerId, 
        ri.account_id,
        ri.description,
        ri.amount_minor,
+       ri.amount_manual_override,
        ri.occurred_at,
        r.status AS reimbursement_status,
        r.title AS reimbursement_title

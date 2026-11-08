@@ -59,7 +59,7 @@ test('clampImportAmountOverridesForTxs caps overrides when pending shrinks', () 
   assert.equal(clamped.tx_1, 70)
 })
 
-test('draft sync keeps partial claim amount when pending is still above it', () => {
+test('draft sync keeps manual partial claim amount when pending is still above it', () => {
   const item = {
     id: 'item_1',
     reimbursement_id: 'claim_1',
@@ -68,6 +68,7 @@ test('draft sync keeps partial claim amount when pending is still above it', () 
     entry_type: 'expense',
     description: '未命名報銷',
     amount_minor: 5000,
+    amount_manual_override: 1,
   }
   const tx = {
     id: 'tx_1',

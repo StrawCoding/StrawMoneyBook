@@ -92,28 +92,31 @@ test('resolveReimbursementImportSync removes fully reimbursed transactions', () 
   })
 })
 
-test('SMB-259: draft sync caps partial import amount when pending drops but keeps it when still above', () => {
+test('SMB-259: auto import amount follows pending up and down when not manually overridden', () => {
   const tx = {
     is_reimbursable: 1,
     amount_minor: -10000,
     reimbursed_minor: 0,
   }
-  const unchanged = shouldSyncDraftClaimItem(
+  const raised = shouldSyncDraftClaimItem(
     {
       source_type: 'transaction',
       entry_type: 'expense',
       amount_minor: 5000,
+      amount_manual_override: 0,
       description: '未命名報銷',
     },
     tx,
   )
-  assert.equal(unchanged.shouldUpdate, false)
+  assert.equal(raised.shouldUpdate, true)
+  assert.equal(raised.sync.amountMinor, 10000)
 
   const capped = shouldSyncDraftClaimItem(
     {
       source_type: 'transaction',
       entry_type: 'expense',
       amount_minor: 8000,
+      amount_manual_override: 0,
       description: '未命名報銷',
     },
     {
@@ -125,6 +128,26 @@ test('SMB-259: draft sync caps partial import amount when pending drops but keep
   assert.equal(capped.sync.amountMinor, 5000)
 })
 
+test('manual claim import amount override is not auto-updated when source tx changes', () => {
+  const tx = {
+    is_reimbursable: 1,
+    amount_minor: -10000,
+    reimbursed_minor: 0,
+  }
+  const locked = shouldSyncDraftClaimItem(
+    {
+      source_type: 'transaction',
+      entry_type: 'expense',
+      amount_minor: 5000,
+      amount_manual_override: 1,
+      description: '未命名報銷',
+    },
+    tx,
+  )
+  assert.equal(locked.shouldUpdate, false)
+  assert.equal(locked.sync.amountMinor, 5000)
+})
+
 test('shouldSyncDraftClaimItem only updates when amount or description changed', () => {
   const tx = {
     is_reimbursable: 1,
@@ -134,14 +157,26 @@ test('shouldSyncDraftClaimItem only updates when amount or description changed',
     category_name: '餐飲',
   }
   const unchanged = shouldSyncDraftClaimItem(
-    { source_type: 'transaction', entry_type: 'expense', amount_minor: 7000, description: '餐飲' },
+    {
+      source_type: 'transaction',
+      entry_type: 'expense',
+      amount_minor: 7000,
+      amount_manual_override: 0,
+      description: '餐飲',
+    },
     tx,
   )
   assert.equal(unchanged.shouldRemove, false)
   assert.equal(unchanged.shouldUpdate, false)
 
   const changed = shouldSyncDraftClaimItem(
-    { source_type: 'transaction', entry_type: 'expense', amount_minor: 8000, description: '餐飲' },
+    {
+      source_type: 'transaction',
+      entry_type: 'expense',
+      amount_minor: 8000,
+      amount_manual_override: 0,
+      description: '餐飲',
+    },
     tx,
   )
   assert.equal(changed.shouldRemove, false)
