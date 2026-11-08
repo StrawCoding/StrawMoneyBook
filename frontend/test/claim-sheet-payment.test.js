@@ -85,6 +85,7 @@ test('schema lists include claim payment tables and settled_minor writeback', ()
     service: readFileSync(resolve(root, 'src/core/services/reimbursement.service.js'), 'utf8'),
     listPage: readFileSync(resolve(root, 'src/ui/views/claims/ClaimSheetListPage.vue'), 'utf8'),
     detailPage: readFileSync(resolve(root, 'src/ui/views/claims/ClaimSheetDetailPage.vue'), 'utf8'),
+    paymentSheet: readFileSync(resolve(root, 'src/ui/components/claims/ClaimSheetRecordPaymentSheet.vue'), 'utf8'),
   }
 
   assert.match(files.migrate, /version: 50, name: 'claim_sheet_payments'/)
@@ -109,8 +110,10 @@ test('schema lists include claim payment tables and settled_minor writeback', ()
   assert.doesNotMatch(files.service, /assertCanTransition\(claim\.status, nextStatus\)[\s\S]*revertingPaymentsToDraft/)
   assert.match(files.detailPage, /isClaimDraftEditable\(value, \{ payments: payments\.value \}\)/)
   assert.doesNotMatch(files.listPage, /async function ensureClaimReadyForPayment/)
-  assert.match(files.listPage, /data-testid="claim-payment-amount"/)
-  assert.match(files.listPage, /amountMinor: completePaymentMinor\.value/)
+  assert.match(files.listPage, /openRecordPaymentOnDetail/)
+  assert.match(files.paymentSheet, /data-testid="claim-payment-amount"/)
+  assert.match(files.paymentSheet, /amountMinor: completePaymentMinor\.value/)
   assert.match(files.detailPage, /t\('claim_sheet\.payments_title'\)/)
   assert.match(files.detailPage, /t\('claim_sheet\.record_payment'\)/)
+  assert.match(files.detailPage, /ClaimSheetRecordPaymentSheet/)
 })

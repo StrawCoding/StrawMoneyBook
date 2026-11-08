@@ -55,14 +55,6 @@
         <button class="btn" :disabled="!isClaimEditable(claim)" @click="openEdit">
           {{ t('common.edit') }}
         </button>
-        <button
-          v-if="isClaimRestorable(claim)"
-          class="btn"
-          :disabled="restoring"
-          @click="openRestoreDialog"
-        >
-          {{ restoring ? t('claim_sheet.processing') : t('claim_sheet.restore') }}
-        </button>
         <button class="btn" :disabled="exporting" @click="exportClaim">
           {{ exporting ? t('claim_sheet.processing') : t('claim_sheet.export') }}
         </button>
@@ -134,16 +126,11 @@
       <p class="muted">{{ t('claim_sheet.not_found') }}</p>
     </article>
 
-    <AppDialog
-      :open="restoreDialogOpen"
-      :title="t('claim_sheet.restore_dialog.title')"
-      :message="claim ? t('claim_sheet.confirm_restore', { title: claim.title || claim.id }) : ''"
-      :confirm-text="t('claim_sheet.restore')"
-      :confirm-disabled="restoring"
-      :loading="restoring"
-      :loading-text="t('claim_sheet.processing')"
-      @close="closeRestoreDialog"
-      @confirm="confirmRestoreClaim"
+    <ClaimSheetRecordPaymentSheet
+      :open="paymentSheetOpen"
+      :claim="claim"
+      @close="closePaymentSheet"
+      @recorded="onPaymentRecorded"
     />
 
     <AppDialog
@@ -166,6 +153,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Capacitor } from '@capacitor/core'
 import { useRoute, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
+import ClaimSheetRecordPaymentSheet from '@/ui/components/claims/ClaimSheetRecordPaymentSheet.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
@@ -173,6 +161,7 @@ import { useUiStore } from '@/ui/stores/ui.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
+import { useAccountStore } from '@/ui/stores/account.store'
 import {
   buildClaimCategoryLookup,
   presentClaimDetailItem,
@@ -188,7 +177,6 @@ import { buildClaimSheetPdfFile } from '@/core/services/claim-sheet-pdf.service'
 import {
   deleteReimbursement,
   getReimbursementDetail,
-  transitionReimbursementStatus,
 } from '@/core/services/reimbursement.service'
 import {
   claimPaidMinorOf,
@@ -206,13 +194,13 @@ const uiStore = useUiStore()
 const ledgerStore = useLedgerStore()
 const categoryStore = useCategoryStore()
 const reimbursementStore = useReimbursementStore()
+const accountStore = useAccountStore()
 
 const loading = ref(false)
 const exporting = ref(false)
 const deleting = ref(false)
-const restoring = ref(false)
 const deleteDialogOpen = ref(false)
-const restoreDialogOpen = ref(false)
+const paymentSheetOpen = ref(false)
 const claim = ref(null)
 const items = ref([])
 const payments = ref([])
@@ -235,8 +223,7 @@ const backLink = computed(() => (
 ))
 
 onMounted(async () => {
-  await categoryStore.load()
-  await reimbursementStore.load()
+  await Promise.all([categoryStore.load(), reimbursementStore.load(), accountStore.load()])
 })
 
 onBeforeUnmount(() => {
@@ -247,6 +234,20 @@ watch(
   [claimId, () => ledgerStore.activeLedgerId],
   () => {
     void loadDetail()
+  },
+  { immediate: true },
+)
+
+watch(
+  [() => route.query.recordPayment, claim],
+  ([value]) => {
+    if (String(value ?? '').trim() !== '1') return
+    if (!claim.value?.id) return
+    if (isClaimCompleteDisabled(claim.value)) {
+      clearRecordPaymentQuery()
+      return
+    }
+    paymentSheetOpen.value = true
   },
   { immediate: true },
 )
@@ -286,23 +287,30 @@ function isClaimEditable(value) {
   return isClaimDraftEditable(value, { payments: payments.value })
 }
 
-function isClaimRestorable(value) {
-  return String(value?.status ?? '').trim() === 'paid' || claimPaidMinorOf(value) > 0
-}
-
 function isClaimCompleteDisabled(value) {
   return claimRemainingMinor(value) <= 0 || String(value?.status ?? '') === 'rejected'
 }
 
 function openRecordPayment() {
   if (!claim.value?.id || isClaimCompleteDisabled(claim.value)) return
-  void router.push({
-    name: 'claim-sheets',
-    query: {
-      complete: claim.value.id,
-      ...(backTab.value === 'completed' ? { tab: 'completed' } : {}),
-    },
-  })
+  paymentSheetOpen.value = true
+}
+
+function closePaymentSheet() {
+  paymentSheetOpen.value = false
+  clearRecordPaymentQuery()
+}
+
+function clearRecordPaymentQuery() {
+  if (!String(route.query.recordPayment ?? '').trim()) return
+  const nextQuery = { ...route.query }
+  delete nextQuery.recordPayment
+  void router.replace({ name: 'claim-sheet-detail', params: { id: claimId.value }, query: nextQuery })
+}
+
+async function onPaymentRecorded() {
+  await loadDetail()
+  clearRecordPaymentQuery()
 }
 
 function signedMinorOfItem(item) {
@@ -446,40 +454,9 @@ function openDeleteDialog() {
   deleteDialogOpen.value = true
 }
 
-function openRestoreDialog() {
-  if (!claim.value || !isClaimRestorable(claim.value)) return
-  restoreDialogOpen.value = true
-}
-
 function closeDeleteDialog() {
   if (deleting.value) return
   deleteDialogOpen.value = false
-}
-
-function closeRestoreDialog() {
-  if (restoring.value) return
-  restoreDialogOpen.value = false
-}
-
-async function confirmRestoreClaim() {
-  if (!ledgerStore.activeLedgerId || !claim.value?.id || restoring.value) return
-
-  restoring.value = true
-  try {
-    const restored = await transitionReimbursementStatus(ledgerStore.activeLedgerId, claim.value.id, 'draft')
-    claim.value = restored
-    await reimbursementStore.load()
-    uiStore.pushToast(t('claim_sheet.toast.restored'))
-    await router.replace({
-      name: 'claim-sheet-detail',
-      params: { id: claim.value.id },
-    })
-  } catch (error) {
-    uiStore.pushToast(error.message ?? t('claim_sheet.toast.restore_failed'), 'error')
-  } finally {
-    restoring.value = false
-    restoreDialogOpen.value = false
-  }
 }
 
 async function confirmDeleteClaim() {

@@ -43,16 +43,25 @@ test('reimbursement repo can look up claim-generated advances and reset paid met
   assert.match(reimbursementRepoSource, /idempotency_key = NULL,/)
 })
 
-test('claim sheet detail page exposes restore action for completed claims', () => {
-  assert.match(claimDetailSource, /v-if="isClaimRestorable\(claim\)"/)
-  assert.match(claimDetailSource, /t\('claim_sheet\.restore'\)/)
-  assert.match(claimDetailSource, /transitionReimbursementStatus\(ledgerStore\.activeLedgerId, claim\.value\.id, 'draft'\)/)
-  assert.match(claimDetailSource, /t\('claim_sheet\.toast\.restored'\)/)
+test('claim sheet detail page records payment on detail instead of list restore', () => {
+  assert.doesNotMatch(claimDetailSource, /t\('claim_sheet\.restore'\)/)
+  assert.doesNotMatch(claimDetailSource, /transitionReimbursementStatus\(ledgerStore\.activeLedgerId, claim\.value\.id, 'draft'\)/)
+  assert.match(claimDetailSource, /ClaimSheetRecordPaymentSheet/)
+  assert.match(claimDetailSource, /recordPayment/)
+})
+
+test('claim sheet list routes record payment to detail page', () => {
+  assert.match(claimListSource, /openRecordPaymentOnDetail/)
+  assert.match(claimListSource, /recordPayment: '1'/)
+  assert.doesNotMatch(claimListSource, /data-testid="claim-payment-amount"/)
 })
 
 test('claim sheet completion account selector matches the shared account options used elsewhere', () => {
-  assert.match(claimListSource, /<CustomSelect v-model="completeForm\.accountId" :groups="accountStore\.groupedRegularAccounts" \/>/)
-  assert.match(claimListSource, /return accountStore\.accounts\.some\(\(item\) => item\.id === String\(completeForm\.accountId \?\? ''\)\.trim\(\)\)/)
-  assert.match(claimListSource, /completeForm\.accountId = String\(accountStore\.accounts\[0\]\?\.id \?\? ''\)/)
-  assert.doesNotMatch(claimListSource, /claimAccountOptions/)
+  const paymentSheetSource = readFileSync(
+    resolve(import.meta.dirname, '../src/ui/components/claims/ClaimSheetRecordPaymentSheet.vue'),
+    'utf8',
+  )
+  assert.match(paymentSheetSource, /<CustomSelect v-model="completeForm\.accountId" :groups="accountStore\.groupedRegularAccounts" \/>/)
+  assert.match(paymentSheetSource, /return accountStore\.accounts\.some\(\(item\) => item\.id === String\(completeForm\.accountId \?\? ''\)\.trim\(\)\)/)
+  assert.match(paymentSheetSource, /completeForm\.accountId = String\(accountStore\.accounts\[0\]\?\.id \?\? ''\)/)
 })

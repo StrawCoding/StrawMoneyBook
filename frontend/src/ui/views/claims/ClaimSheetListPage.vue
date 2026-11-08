@@ -78,7 +78,7 @@
               v-if="!isClaimCompleteDisabled(claim)"
               class="btn primary claim-complete-btn"
               data-testid="claim-record-payment"
-              @click.stop="openCompleteSheet(claim)"
+              @click.stop="openRecordPaymentOnDetail(claim)"
             >
               {{ t('claim_sheet.record_payment') }}
             </button>
@@ -146,102 +146,6 @@
       @remove="removeEditingManualItem"
     />
 
-    <InputBottomSheet
-      :open="Boolean(completeTarget)"
-      :title="t('claim_sheet.record_payment')"
-      size="form"
-      :header-close="false"
-      close-variant="icon"
-      :body-class="'stack form-wrap'"
-      :sheet-class="'sheet'"
-      :show-footer="true"
-      @close="closeCompleteSheet"
-    >
-              <div class="row">
-                <span>{{ t('claim_sheet.sheet_label') }}</span>
-                <strong>{{ completeTarget.title }}</strong>
-              </div>
-              <div v-if="completeTarget.counterparty_name" class="row">
-                <span>{{ t('claim_sheet.form.counterparty') }}</span>
-                <strong>{{ completeTarget.counterparty_name }}</strong>
-              </div>
-              <div class="row">
-                <span>{{ t('claim_sheet.net_amount') }}</span>
-                <MoneyText :value-minor="completeTarget.total_minor" />
-              </div>
-              <div class="row">
-                <span>{{ t('claim_sheet.paid_amount') }}</span>
-                <MoneyText :value-minor="claimPaidMinorOf(completeTarget)" />
-              </div>
-              <div class="row">
-                <span>{{ t('claim_sheet.remaining_amount') }}</span>
-                <MoneyText :value-minor="completeRemainingMinor" />
-              </div>
-              <label>
-                {{ t('claim_sheet.form.payment_amount') }}
-                <input
-                  v-model.number="completeForm.amountMajor"
-                  class="input"
-                  data-testid="claim-payment-amount"
-                  type="number"
-                  min="0"
-                  step="1"
-                />
-              </label>
-              <div class="copy-wrap">
-                <p class="copy-title">代收抵扣（可複選）</p>
-                <div v-if="usableCompleteAdvances.length" class="copy-ledger-list">
-                  <label v-for="advance in usableCompleteAdvances" :key="advance.id" class="copy-ledger-item">
-                    <input v-model="completeForm.selectedAdvanceIds" class="copy-ledger-check" type="checkbox" :value="advance.id" />
-                    <span class="copy-ledger-mark">✓</span>
-                    <span class="copy-ledger-name">
-                      <span class="advance-meta-line">
-                        <font-awesome-icon
-                          v-if="advanceCategoryIcon(advance)"
-                          :icon="advanceCategoryIcon(advance)"
-                          class="advance-category-icon"
-                        />
-                        <span>{{ advanceCategoryName(advance) }}</span>
-                      </span>
-                      <small class="muted copy-ledger-meta">
-                        {{ advance.account_name || '未指定帳戶' }}
-                      </small>
-                      <small class="muted copy-ledger-meta">
-                        <MoneyText :value-minor="advance.available_minor" />
-                      </small>
-                    </span>
-                  </label>
-                </div>
-                <p v-else class="muted">目前沒有可用代收</p>
-                <div v-if="selectedCompleteAdvanceCapacityMinor > 0" class="row advance-summary-row">
-                  <span>本次代收抵扣</span>
-                  <MoneyText :value-minor="selectedCompleteAdvanceCapacityMinor" />
-                </div>
-                <p class="muted">代收只是可抵金額紀錄，可跨不同帳戶抵消；從 A 收，也可以從 B 出。</p>
-                <p v-if="completeAdvanceOffsettableMinor <= 0" class="muted">這張請款單沒有可供代收抵扣的匯入報銷項目。</p>
-                <p v-else class="muted">代收會優先抵扣匯入的報銷項目，剩餘金額才建立新的入帳交易。</p>
-                <p v-if="completeCashMinor <= 0" class="muted">本次將全額以代收抵扣，不再建立新的入帳交易。</p>
-              </div>
-              <label v-if="completeRequiresAccount">
-                {{ t('claim_sheet.form.account') }}
-                <CustomSelect v-model="completeForm.accountId" :groups="accountStore.groupedRegularAccounts" />
-              </label>
-              <label>
-                {{ t('claim_sheet.form.complete_note') }}
-                <input
-                  v-model="completeForm.note"
-                  class="input"
-                  type="text"
-                  :placeholder="t('claim_sheet.form.complete_note_placeholder')"
-                />
-              </label>
-      <template #footer>
-        <button class="btn" @click="closeCompleteSheet">{{ t('common.cancel') }}</button>
-        <button class="btn primary" data-testid="claim-payment-submit" :disabled="completing || !canCompleteClaim" @click="submitCompleteSheet">
-          {{ completing ? t('claim_sheet.processing') : (isCompleteFullRemaining ? t('claim_sheet.confirm_complete') : t('claim_sheet.confirm_payment')) }}
-        </button>
-      </template>
-    </InputBottomSheet>
   </HabitatPageShell>
 </template>
 
@@ -253,7 +157,6 @@ import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import ClaimSheetDraftForm from '@/ui/components/claims/ClaimSheetDraftForm.vue'
 import ClaimSheetManualItemSheet from '@/ui/components/claims/ClaimSheetManualItemSheet.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
-import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
@@ -273,7 +176,6 @@ import {
   createReimbursementDraft,
   getReimbursementDetail,
   loadReimbursementDashboard,
-  markReimbursementPaid,
   updateReimbursementDraft,
 } from '@/core/services/reimbursement.service'
 import {
@@ -294,12 +196,8 @@ import {
   seedImportAmountOverrides,
 } from '@/ui/utils/claim-sheet-import-amount-overrides'
 import {
-  allocateClaimPaymentFifo,
   claimPaidMinorOf,
   claimRemainingMinor,
-  isAdvanceClaimItem,
-  isBorrowLoanClaimItem,
-  isClaimCollecting,
   isClaimDraftEditable,
   isClaimFullyPaid,
 } from '@/core/utils/claim-sheet-payment'
@@ -325,9 +223,6 @@ const createDraftSection = ref('manual')
 const editingManualItemId = ref('')
 const manualItemSheetRef = ref(null)
 const creating = ref(false)
-const completeTarget = ref(null)
-const completeItems = ref([])
-const completing = ref(false)
 const activeClaimPage = ref('active')
 const createForm = reactive({
   editingClaimId: '',
@@ -340,13 +235,6 @@ const createForm = reactive({
   borrowLoanImportAmountOverrides: {},
   manualItems: [],
 })
-const completeForm = reactive({
-  accountId: '',
-  note: '',
-  amountMajor: 0,
-  selectedAdvanceIds: [],
-})
-
 const entryTypeOptions = computed(() => [
   { label: t('claim_sheet.entry_type.expense'), value: 'expense' },
   { label: t('claim_sheet.entry_type.income'), value: 'income' },
@@ -356,94 +244,6 @@ const entryTypeOptions = computed(() => [
 const claimCategoryLookup = computed(() => buildClaimCategoryLookup(categoryStore.categories))
 
 const isEditingCreateForm = computed(() => Boolean(String(createForm.editingClaimId ?? '').trim()))
-
-const selectedCompleteAdvanceIdSet = computed(() => {
-  return new Set((completeForm.selectedAdvanceIds ?? []).map((id) => String(id ?? '').trim()).filter(Boolean))
-})
-
-const usableCompleteAdvances = computed(() => {
-  return reimbursementStore.advances.filter((item) => {
-    const advanceId = String(item?.id ?? '').trim()
-    const availableMinor = Math.max(0, Math.round(Number(item?.available_minor ?? 0)))
-    return Boolean(advanceId) && (availableMinor > 0 || selectedCompleteAdvanceIdSet.value.has(advanceId))
-  })
-})
-
-const completeRemainingMinor = computed(() => claimRemainingMinor(completeTarget.value))
-
-const completePaymentMinor = computed(() => {
-  return Math.max(0, Math.round(Number(completeForm.amountMajor ?? 0) * 100))
-})
-
-const completePaymentAllocations = computed(() => {
-  return allocateClaimPaymentFifo(completeItems.value, completePaymentMinor.value).allocations
-})
-
-const isCompleteFullRemaining = computed(() => {
-  return completePaymentMinor.value > 0 && completePaymentMinor.value === completeRemainingMinor.value
-})
-
-const completeAdvanceOffsettableMinor = computed(() => {
-  return completePaymentAllocations.value.reduce((sum, row) => {
-    if (isBorrowLoanClaimItem(row.item) || isAdvanceClaimItem(row.item)) return sum
-    const txId = String(row.item?.transaction_id ?? '').trim()
-    if (!txId || String(row.item?.entry_type ?? '') === 'income') return sum
-    return sum + row.amountMinor
-  }, 0)
-})
-
-const selectedCompleteAdvanceCapacityMinor = computed(() => {
-  let remainingMinor = completeAdvanceOffsettableMinor.value
-  if (remainingMinor <= 0) return 0
-
-  const advanceMap = new Map(usableCompleteAdvances.value.map((item) => [String(item?.id ?? '').trim(), item]))
-  let totalMinor = 0
-
-  for (const rawAdvanceId of completeForm.selectedAdvanceIds ?? []) {
-    const advanceId = String(rawAdvanceId ?? '').trim()
-    if (!advanceId || remainingMinor <= 0) continue
-    const advance = advanceMap.get(advanceId)
-    if (!advance) continue
-    const availableMinor = Math.max(0, Math.round(Number(advance.available_minor ?? 0)))
-    if (availableMinor <= 0) continue
-    const appliedMinor = Math.min(availableMinor, remainingMinor)
-    totalMinor += appliedMinor
-    remainingMinor -= appliedMinor
-  }
-
-  return totalMinor
-})
-
-const completeCashMinor = computed(() => {
-  const paymentMinor = completePaymentMinor.value
-  return Math.max(
-    0,
-    paymentMinor
-      - selectedCompleteAdvanceCapacityMinor.value
-      - completeClaimAdvanceMinor.value
-      - completeBorrowLoanMinor.value,
-  )
-})
-
-const completeClaimAdvanceMinor = computed(() => {
-  return completePaymentAllocations.value.reduce((sum, row) => {
-    if (!isAdvanceClaimItem(row.item)) return sum
-    return sum + row.amountMinor
-  }, 0)
-})
-
-const completeBorrowLoanMinor = computed(() => {
-  return completePaymentAllocations.value.reduce((sum, row) => {
-    if (!isBorrowLoanClaimItem(row.item)) return sum
-    return sum + row.amountMinor
-  }, 0)
-})
-
-const completeRequiresAccount = computed(() => (
-  completeCashMinor.value > 0
-  || completeClaimAdvanceMinor.value > 0
-  || completeBorrowLoanMinor.value > 0
-))
 
 const pendingClaimMinor = computed(() => {
   return dashboard.value.claims
@@ -542,15 +342,6 @@ const createSubmitHint = computed(() => {
   return t('claim_sheet.form.hint_check_amounts')
 })
 
-const canCompleteClaim = computed(() => {
-  if (!completeTarget.value) return false
-  if (completePaymentMinor.value <= 0) return false
-  if (completePaymentMinor.value > completeRemainingMinor.value) return false
-  if (allocateClaimPaymentFifo(completeItems.value, completePaymentMinor.value).leftoverMinor > 0) return false
-  if (!completeRequiresAccount.value) return true
-  return accountStore.accounts.some((item) => item.id === String(completeForm.accountId ?? '').trim())
-})
-
 onMounted(async () => {
   syncActiveClaimPageFromRoute()
   createSheetBootstrapReady.value = false
@@ -583,8 +374,15 @@ watch(
     if (!claim || isClaimCompleteDisabled(claim)) return
     const nextQuery = { ...route.query }
     delete nextQuery.complete
-    void router.replace({ name: 'claim-sheets', query: nextQuery })
-    openCompleteSheet(claim)
+    void router.replace({
+      name: 'claim-sheet-detail',
+      params: { id },
+      query: {
+        ...nextQuery,
+        recordPayment: '1',
+        ...(claimTabOfStatus(claim?.status) === 'completed' ? { tab: 'completed' } : {}),
+      },
+    })
   },
 )
 
@@ -1085,88 +883,23 @@ function isClaimCompleteDisabled(claim) {
   return claimRemainingMinor(claim) <= 0 || ['rejected'].includes(String(claim?.status ?? ''))
 }
 
-function setCompleteAmountToRemaining(claim) {
-  completeForm.amountMajor = claimRemainingMinor(claim) / 100
-}
-
-function openCompleteSheet(claim) {
-  if (isClaimCompleteDisabled(claim)) return
-  completeTarget.value = claim
-  completeItems.value = []
-  completeForm.accountId = String(accountStore.accounts[0]?.id ?? '')
-  completeForm.note = String(claim?.title ?? '').trim()
-    ? t('claim_sheet.default_complete_note_named', { title: claim.title })
-    : t('claim_sheet.default_complete_note')
-  completeForm.selectedAdvanceIds = []
-  setCompleteAmountToRemaining(claim)
-  void loadCompleteItems(claim.id)
-}
-
-function closeCompleteSheet() {
-  if (completing.value) return
-  completeTarget.value = null
-  completeItems.value = []
-  completeForm.selectedAdvanceIds = []
-}
-
-async function submitCompleteSheet() {
-  if (!canCompleteClaim.value || completing.value || !ledgerStore.activeLedgerId || !completeTarget.value) return
-
-  completing.value = true
-  try {
-    const result = await markReimbursementPaid(ledgerStore.activeLedgerId, {
-      reimbursementId: completeTarget.value.id,
-      accountId: completeRequiresAccount.value ? completeForm.accountId : '',
-      note: completeForm.note,
-      selectedAdvanceIds: completeForm.selectedAdvanceIds,
-      amountMinor: completePaymentMinor.value,
-    })
-    await Promise.all([reloadDashboard(), accountStore.load()])
-    await reimbursementStore.load()
-    await reloadImportableTxs()
-    closeCompleteSheet()
-    const remainingMinor = Math.max(0, Math.round(Number(result?.remainingMinor ?? 0)))
-    if (remainingMinor > 0) {
-      uiStore.pushToast(t('claim_sheet.toast.recorded_remaining', { amount: remainingMinor / 100 }))
-      return
-    }
-    uiStore.pushToast(t('claim_sheet.toast.completed'))
-    await router.replace({ name: 'home' })
-  } catch (error) {
-    uiStore.pushToast(error.message ?? t('claim_sheet.toast.complete_failed'), 'error')
-  } finally {
-    completing.value = false
-  }
-}
-
-function advanceCategoryName(advance) {
-  const name = String(advance?.category_name ?? '').trim()
-  if (name) return name
-  const note = String(advance?.note ?? '').trim()
-  return note || '代收'
-}
-
-function advanceCategoryIcon(advance) {
-  return String(advance?.category_icon ?? '').trim()
+function openRecordPaymentOnDetail(claimRow) {
+  if (!claimRow?.id || isClaimCompleteDisabled(claimRow)) return
+  const tab = claimTabOfStatus(claimRow?.status)
+  void router.push({
+    name: 'claim-sheet-detail',
+    params: { id: claimRow.id },
+    query: {
+      recordPayment: '1',
+      ...(tab === 'completed' ? { tab: 'completed' } : {}),
+    },
+  })
 }
 
 function manualItemPresentation(item) {
   return presentClaimManualFormItem(item, claimCategoryLookup.value, t)
 }
 
-async function loadCompleteItems(claimId) {
-  if (!ledgerStore.activeLedgerId || !claimId) return
-  try {
-    const detail = await getReimbursementDetail(ledgerStore.activeLedgerId, claimId)
-    if (String(completeTarget.value?.id ?? '') !== String(claimId)) return
-    completeTarget.value = detail.claim ?? completeTarget.value
-    completeItems.value = detail.items
-    setCompleteAmountToRemaining(completeTarget.value)
-  } catch (error) {
-    closeCompleteSheet()
-    uiStore.pushToast(error.message ?? t('claim_sheet.toast.load_failed'), 'error')
-  }
-}
 </script>
 
 <style scoped>

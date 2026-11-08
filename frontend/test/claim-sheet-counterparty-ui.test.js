@@ -13,6 +13,11 @@ const claimDetailSource = readFileSync(
   'utf8',
 )
 
+const paymentSheetSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/components/claims/ClaimSheetRecordPaymentSheet.vue'),
+  'utf8',
+)
+
 test('claim sheet create form includes a counterparty field and passes it to the service', () => {
   assert.match(claimSheetSource, /v-model="createForm\.counterpartyName"/)
   assert.match(claimSheetSource, /createForm = reactive\(\{[\s\S]*editingClaimId: '',[\s\S]*counterpartyName: ''/)
@@ -24,5 +29,5 @@ test('claim sheet create form includes a counterparty field and passes it to the
 test('claim sheet surfaces the counterparty in list and detail flows', () => {
   assert.match(claimSheetSource, /v-if="claim\.counterparty_name"/)
   assert.match(claimDetailSource, /v-if="claim\.counterparty_name"/)
-  assert.match(claimSheetSource, /v-if="completeTarget\.counterparty_name"/)
+  assert.match(paymentSheetSource, /v-if="targetClaim\.counterparty_name"/)
 })

@@ -189,12 +189,15 @@ try {
 
   await clickByTestId('claim-record-payment')
   for (let attempt = 0; attempt < 40; attempt += 1) {
-    const amount = await evalPage(`() => document.querySelector('[data-testid=claim-payment-amount]')?.value ?? ''`)
-    if (amount) {
-      assert.equal(Number(amount), 200, `expected remaining 200, got ${amount}`)
+    const state = await evalPage(`() => ({
+      path: window.location.pathname,
+      amount: document.querySelector('[data-testid=claim-payment-amount]')?.value ?? '',
+    })`)
+    if (state.path.includes('/claim-sheets/') && state.amount) {
+      assert.equal(Number(state.amount), 200, `expected remaining 200, got ${state.amount}`)
       break
     }
-    if (attempt === 39) assert.fail('payment amount field missing')
+    if (attempt === 39) assert.fail(`payment sheet missing on detail: ${JSON.stringify(state)}`)
     await delay(250)
   }
 
@@ -204,13 +207,12 @@ try {
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const state = await evalPage(`() => ({
       path: window.location.pathname,
-      remaining: [...document.querySelectorAll('.claim-item')].map((node) => node.textContent || '').join(' '),
+      detailText: document.querySelector('[data-testid=claim-sheet-detail-view]')?.textContent || '',
       toasts: [...document.querySelectorAll('.toast')].map((node) => node.textContent?.trim() ?? '').filter(Boolean),
-      hasPay: Boolean(document.querySelector('[data-testid=claim-record-payment]')),
+      hasPayBtn: Boolean(document.querySelector('[data-testid=claim-sheet-detail-view] button')?.textContent?.includes('入帳')),
     })`)
-    if (state.toasts.some((text) => /剩餘|remaining|残高/u.test(text)) || /120/.test(state.remaining)) {
-      assert.ok(state.hasPay, JSON.stringify(state))
-      assert.ok(state.path.includes('/claim-sheets'), JSON.stringify(state))
+    if (state.toasts.some((text) => /剩餘|remaining|残高/u.test(text)) || /120/.test(state.detailText)) {
+      assert.ok(state.path.includes('/claim-sheets/'), JSON.stringify(state))
       break
     }
     if (state.toasts.some((text) => /失敗|failed|錯誤/u.test(text))) {
@@ -220,7 +222,7 @@ try {
     await delay(250)
   }
 
-  await clickByTestId('claim-record-payment')
+  await runPlaywrightCli(['click', '[data-testid=claim-sheet-detail-view] button:has-text("入帳"), [data-testid=claim-sheet-detail-view] button:has-text("Record Payment")'])
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const amount = await evalPage(`() => document.querySelector('[data-testid=claim-payment-amount]')?.value ?? ''`)
     if (amount) {
@@ -237,7 +239,7 @@ try {
       path: window.location.pathname,
       toasts: [...document.querySelectorAll('.toast')].map((node) => node.textContent?.trim() ?? '').filter(Boolean),
     })`)
-    if (state.path === '/' || state.path === '/home' || state.toasts.some((text) => /已完成|completed|完了/u.test(text))) {
+    if (state.path.includes('/claim-sheets/') && state.toasts.some((text) => /已完成|completed|完了/u.test(text))) {
       break
     }
     if (state.toasts.some((text) => /失敗|failed|錯誤/u.test(text))) {
