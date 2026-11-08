@@ -24,11 +24,16 @@ const advanceSourceMigration = readFileSync(
 )
 
 test('reimbursement service supports updating draft claim sheets', () => {
-  assert.match(reimbursementServiceSource, /export async function updateReimbursementDraft\(ledgerId, reimbursementId, payload\)/)
-  assert.match(reimbursementServiceSource, /if \(!isClaimDraftEditable\(claim, \{ payments \}\)\) \{\s+throw new Error\('已有入帳紀錄或已完成請款，無法編輯'\)/)
-  assert.match(reimbursementServiceSource, /if \(recordedMinor > 0\) \{[\s\S]*revertedPayments = true/)
-  assert.match(reimbursementServiceSource, /await updateReimbursement\(ledgerId, normalizedReimbursementId, \{/)
-  assert.match(reimbursementServiceSource, /await replaceReimbursementItems\(ledgerId, normalizedReimbursementId, payload\.items\)/)
+  const updateDraftSource = reimbursementServiceSource.match(
+    /export async function updateReimbursementDraft\([\s\S]*?^export async function getReimbursementDetail/m,
+  )?.[0] ?? ''
+  assert.ok(updateDraftSource)
+  assert.match(updateDraftSource, /if \(!isClaimDraftEditable\(claim, \{ payments \}\)\) \{\s+throw new Error\('已有入帳紀錄或已完成請款，無法編輯'\)/)
+  assert.match(reimbursementServiceSource, /async function rebuildClaimSettlementsAfterItemReplace/)
+  assert.match(updateDraftSource, /if \(recordedMinor > 0\) \{[\s\S]*rebuildClaimSettlementsAfterItemReplace/)
+  assert.doesNotMatch(updateDraftSource, /if \(recordedMinor > 0\)[\s\S]*revertPaidClaimEffects/)
+  assert.match(updateDraftSource, /await updateReimbursement\(ledgerId, normalizedReimbursementId, \{/)
+  assert.match(updateDraftSource, /await replaceReimbursementItems\(ledgerId, normalizedReimbursementId, payload\.items\)/)
 })
 
 test('claim payment creates reimbursement advances for advance items', () => {

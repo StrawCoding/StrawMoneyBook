@@ -83,7 +83,7 @@ export function claimRecordedPaymentMinor(claim, payments = null) {
   )
 }
 
-/** Editable until fully paid or rejected; partial payments (collecting) may edit and save will revert installments. */
+/** Editable until fully paid or rejected; partial payments (collecting) may edit without undoing ledger entries. */
 export function isClaimDraftEditable(claim, options = {}) {
   if (!claim) return false
   const payments = options.payments ?? null

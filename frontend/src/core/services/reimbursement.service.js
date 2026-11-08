@@ -43,6 +43,7 @@ import {
   createReimbursementItem,
   deleteReimbursementItemsByReimbursementId,
   deleteReimbursementById,
+  deleteReimbursementPaymentAllocationsByReimbursementId,
   deleteReimbursementPaymentsByReimbursementId,
   deleteReimbursementAdvanceUsageById,
   getReimbursementAdvanceUsageById,
@@ -75,8 +76,10 @@ import {
   isAdvanceClaimItem,
   isBorrowLoanClaimItem,
   claimRecordedPaymentMinor,
+  claimTotalMinorOf,
   isClaimDraftEditable,
   isClaimFullyPaid,
+  itemSettledMinorOf,
 } from '@/core/utils/claim-sheet-payment'
 
 const ADDON_NOTE_PREFIX = '【附加項目】'
@@ -471,6 +474,39 @@ export async function createReimbursementDraft(ledgerId, payload) {
   })
 }
 
+async function rebuildClaimSettlementsAfterItemReplace(ledgerId, reimbursementId) {
+  const payments = await listReimbursementPayments(ledgerId, reimbursementId)
+  if (!payments.length) return
+
+  await resetReimbursementItemSettledMinor(ledgerId, reimbursementId)
+  await deleteReimbursementPaymentAllocationsByReimbursementId(ledgerId, reimbursementId)
+
+  let items = await listReimbursementItems(ledgerId, reimbursementId)
+  for (const payment of payments) {
+    const paymentMinor = Math.max(0, Math.round(Number(payment?.amount_minor ?? 0)))
+    if (paymentMinor <= 0) continue
+    const { allocations, leftoverMinor } = allocateClaimPaymentFifo(items, paymentMinor)
+    if (!allocations.length || leftoverMinor > 0) {
+      throw new Error('編輯後請款項目不足以涵蓋已入帳金額')
+    }
+    for (const row of allocations) {
+      await addReimbursementItemSettledMinor(ledgerId, row.itemId, row.amountMinor)
+      await createReimbursementPaymentAllocation(ledgerId, {
+        paymentId: payment.id,
+        itemId: row.itemId,
+        amountMinor: row.amountMinor,
+      })
+      items = items.map((item) => (
+        String(item.id) === String(row.itemId)
+          ? { ...item, settled_minor: itemSettledMinorOf(item) + row.amountMinor }
+          : item
+      ))
+    }
+  }
+
+  await syncLinkedReimbursableTransactions(ledgerId, items)
+}
+
 async function replaceReimbursementItems(ledgerId, reimbursementId, items = []) {
   await deleteReimbursementItemsByReimbursementId(ledgerId, reimbursementId)
 
@@ -531,18 +567,13 @@ export async function updateReimbursementDraft(ledgerId, reimbursementId, payloa
     }
 
     const recordedMinor = claimRecordedPaymentMinor(claim, payments)
-    let revertedPayments = false
-    if (recordedMinor > 0) {
+    const hadGhostPaidState = recordedMinor <= 0 && payments.length > 0
+    if (recordedMinor <= 0 && String(claim.status ?? '') === 'paid') {
       const claimItems = await listReimbursementItems(ledgerId, normalizedReimbursementId)
       await revertPaidClaimEffects(ledgerId, claim, claimItems)
       claim = await getReimbursementById(ledgerId, normalizedReimbursementId)
-      revertedPayments = true
-    } else if (payments.length) {
+    } else if (hadGhostPaidState) {
       await deleteReimbursementPaymentsByReimbursementId(ledgerId, normalizedReimbursementId)
-    } else if (String(claim.status ?? '') === 'paid') {
-      const claimItems = await listReimbursementItems(ledgerId, normalizedReimbursementId)
-      await revertPaidClaimEffects(ledgerId, claim, claimItems)
-      claim = await getReimbursementById(ledgerId, normalizedReimbursementId)
     }
 
     const counterpartyId = await ensureCounterpartyByName(ledgerId, payload.counterpartyName ?? '')
@@ -553,10 +584,17 @@ export async function updateReimbursementDraft(ledgerId, reimbursementId, payloa
     })
     await replaceReimbursementItems(ledgerId, normalizedReimbursementId, payload.items)
     const updated = await recomputeReimbursementTotal(ledgerId, normalizedReimbursementId)
-    const finalized = String(updated?.status ?? 'draft') !== 'draft'
+    if (recordedMinor > 0) {
+      const nextTotalMinor = claimTotalMinorOf(updated)
+      if (nextTotalMinor < recordedMinor) {
+        throw new Error('請款淨額不可低於已入帳金額')
+      }
+      await rebuildClaimSettlementsAfterItemReplace(ledgerId, normalizedReimbursementId)
+    }
+    const finalized = hadGhostPaidState && String(updated?.status ?? 'draft') !== 'draft'
       ? await updateReimbursementStatus(ledgerId, normalizedReimbursementId, 'draft')
-      : updated
-    return { ...finalized, revertedPayments }
+      : await getReimbursementById(ledgerId, normalizedReimbursementId)
+    return { ...finalized, revertedPayments: false }
   })
 }
 

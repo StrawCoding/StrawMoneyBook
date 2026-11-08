@@ -969,7 +969,7 @@ export async function listReimbursementPayments(ledgerId, reimbursementId) {
   return rowsOf(result)
 }
 
-export async function deleteReimbursementPaymentsByReimbursementId(ledgerId, reimbursementId) {
+export async function deleteReimbursementPaymentAllocationsByReimbursementId(ledgerId, reimbursementId) {
   assertLedgerId(ledgerId)
   await run(
     `DELETE FROM reimbursement_payment_allocations
@@ -981,6 +981,11 @@ export async function deleteReimbursementPaymentsByReimbursementId(ledgerId, rei
        );`,
     [ledgerId, ledgerId, reimbursementId],
   )
+}
+
+export async function deleteReimbursementPaymentsByReimbursementId(ledgerId, reimbursementId) {
+  assertLedgerId(ledgerId)
+  await deleteReimbursementPaymentAllocationsByReimbursementId(ledgerId, reimbursementId)
   await run(
     `DELETE FROM reimbursement_payments
      WHERE ledger_id = ?
