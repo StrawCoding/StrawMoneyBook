@@ -52,7 +52,7 @@
           v-for="tx in filteredTransactions"
           :key="tx.id"
           class="tx-item"
-          :class="[reimbursableTransactionRowClass(tx), { selectable: batchMode, selected: selectedIds.has(tx.id) }]"
+          :class="{ selectable: batchMode, selected: selectedIds.has(tx.id) }"
           role="button"
           tabindex="0"
           @click="batchMode ? toggleSelect(tx.id) : openEdit(tx)"
@@ -61,10 +61,11 @@
             <font-awesome-icon v-if="selectedIds.has(tx.id)" icon="fa-solid fa-check" />
           </span>
           <div class="tx-main">
-            <strong class="tx-title">
+            <div class="tx-title">
               <font-awesome-icon v-if="categoryIcon(tx)" :icon="categoryIcon(tx)" class="tx-icon" />
-              <span>{{ labelOfTransaction(tx) }}</span>
-            </strong>
+              <strong>{{ labelOfTransaction(tx) }}</strong>
+              <ReimbursableTransactionBadge :tx="tx" />
+            </div>
             <small class="muted tx-account-line">
               <font-awesome-icon v-if="accountIcon(tx.account_id)" :icon="accountIcon(tx.account_id)" class="tx-account-icon" />
               <span>{{ accountName(tx.account_id) }} ・ {{ formatTime(tx.occurred_at) }}</span>
@@ -177,7 +178,7 @@ import { useLoanStore } from '@/ui/stores/loan.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useTransactionSearchPage } from '@/ui/composables/useTransactionSearchPage'
-import { reimbursableTransactionRowClass } from '@/ui/utils/reimbursable-transaction'
+import ReimbursableTransactionBadge from '@/ui/components/transactions/ReimbursableTransactionBadge.vue'
 
 const ledgerStore = useLedgerStore()
 const categoryStore = useCategoryStore()

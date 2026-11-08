@@ -1140,6 +1140,7 @@ export const MESSAGES_JA = {
   'ai_bookkeeping.input.hint_keywords': '金額・日付・口座名・カテゴリ名・精算/振替のキーワードを入力できます。',
   'ai_bookkeeping.input.hint_multiline': '複数行で自動一括登録、1行1件。',
   'ai_bookkeeping.speech.listening_prefix': '音声認識中：',
+  'home_tx.reimbursable_badge': '立替',
   'home_tx.empty_hint': 'この期間の取引はまだありません。最初の記録を追加しましょう。',
   'home_tx.empty_action': '今すぐ記帳',
   'home_tx.date_income_short': '収',

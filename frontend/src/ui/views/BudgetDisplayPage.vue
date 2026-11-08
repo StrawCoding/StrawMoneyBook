@@ -165,7 +165,6 @@
           v-for="tx in selectedDayTransactions"
           :key="tx.id"
           class="tx-item"
-          :class="reimbursableTransactionRowClass(tx)"
           role="button"
           tabindex="0"
           :data-testid="`budget-day-tx-${tx.id}`"
@@ -175,8 +174,9 @@
           <span class="row-icon-wrap">
             <font-awesome-icon :icon="txIcon(tx)" />
           </span>
-          <div class="tx-main">
+          <div class="tx-main tx-main--with-badge">
             <strong>{{ txLabel(tx) }}</strong>
+            <ReimbursableTransactionBadge :tx="tx" />
           </div>
           <MoneyText :value-minor="tx.amount_minor" :currency="tx.account_currency_code" tone="expense" />
         </li>
@@ -283,7 +283,7 @@ import {
 } from '@/core/services/budget.service'
 import { listTransactionsForCalendarMonth } from '@/core/services/transaction-query.service'
 import { defaultCategoryExpenseIcon, normalizeFaIcon } from '@/ui/utils/fa-icon-options'
-import { reimbursableTransactionRowClass } from '@/ui/utils/reimbursable-transaction'
+import ReimbursableTransactionBadge from '@/ui/components/transactions/ReimbursableTransactionBadge.vue'
 
 const router = useRouter()
 const budgetStore = useBudgetStore()

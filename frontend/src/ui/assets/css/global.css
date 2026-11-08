@@ -251,25 +251,27 @@ button:focus-visible,
   box-shadow: none;
 }
 
-/* 待報銷支出：略降飽和 + 標題／金額綠色（全站交易列表共用） */
-.tx-item.tx-item--reimbursable {
-  filter: saturate(0.88) brightness(0.95);
-  background: color-mix(in srgb, var(--surface-soft, rgba(140, 140, 140, 0.12)) 55%, transparent);
+/* 待報銷支出：列表綠色標籤（全站交易列表共用） */
+.tx-reimbursable-badge {
+  flex-shrink: 0;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ok) 20%, var(--card) 80%);
+  color: var(--ok-soft);
+  border: 1px solid color-mix(in srgb, var(--ok) 42%, transparent);
 }
 
-.tx-item.tx-item--reimbursable .tx-type,
-.tx-item.tx-item--reimbursable .tx-type span,
-.tx-item.tx-item--reimbursable .tx-title,
-.tx-item.tx-item--reimbursable .tx-title span {
-  color: var(--income-dark, #2fb86f);
-}
-
-.tx-item.tx-item--reimbursable .money-expense {
-  color: var(--income-dark, #2fb86f);
-}
-
-.tx-item.tx-item--reimbursable .tx-main > strong {
-  color: var(--income-dark, #2fb86f);
+.tx-type,
+.tx-title,
+.tx-main--with-badge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
 }
 
 .app-shell {

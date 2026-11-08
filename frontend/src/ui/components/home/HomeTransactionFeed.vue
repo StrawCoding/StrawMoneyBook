@@ -31,7 +31,6 @@
             v-for="tx in group.items"
             :key="tx.id"
             class="tx-item"
-            :class="reimbursableTransactionRowClass(tx)"
             role="button"
             tabindex="0"
             @click="openEdit(tx)"
@@ -42,6 +41,7 @@
             <div class="tx-main">
               <div class="tx-type">
                 <span>{{ labelOfTransaction(tx) }}</span>
+                <ReimbursableTransactionBadge :tx="tx" />
               </div>
               <div class="tx-meta-row muted">
                 <small class="tx-time">{{ formatTime(tx?.occurred_at) }}</small>
@@ -124,7 +124,7 @@ import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { rememberHomeScrollPosition } from '@/ui/services/route-scroll.service'
 import { getEffectiveTransactionAmountMinor, isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 import { buildTransactionEditorAttributionView } from '@/core/services/transaction-editor-attribution'
-import { reimbursableTransactionRowClass } from '@/ui/utils/reimbursable-transaction'
+import ReimbursableTransactionBadge from '@/ui/components/transactions/ReimbursableTransactionBadge.vue'
 import { getSetting } from '@/core/repositories/settings.repo'
 
 const transactionStore = useTransactionStore()

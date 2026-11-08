@@ -6,6 +6,3 @@ export function isPendingReimbursableTransaction(tx) {
   return state !== 'reimbursed'
 }
 
-export function reimbursableTransactionRowClass(tx) {
-  return isPendingReimbursableTransaction(tx) ? 'tx-item--reimbursable' : ''
-}

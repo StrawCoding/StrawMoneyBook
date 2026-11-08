@@ -2234,6 +2234,7 @@ export const MESSAGES_EN = {
     'home_asset_summary.balance_label': 'Balance',
     'home_tx.title': 'Transaction History',
     'home_tx.badge_count': '{month} {count} transactions',
+    'home_tx.reimbursable_badge': 'Reimbursable',
     'home_tx.empty_this_month': 'No transactions this month',
     'home_tx.range_year': '{year}',
     'home_tx.range_current': 'This Month',

@@ -210,7 +210,6 @@
               v-for="tx in group.items"
               :key="tx.id"
               class="tx-item"
-              :class="reimbursableTransactionRowClass(tx)"
               role="button"
               tabindex="0"
               @click="openEdit(tx)"
@@ -220,7 +219,10 @@
                 <font-awesome-icon v-if="categoryIconOfTransaction(tx)" :icon="categoryIconOfTransaction(tx)" class="tx-icon" />
               </div>
               <div class="tx-main">
-              <div class="tx-type">{{ labelOfTransaction(tx) }}</div>
+              <div class="tx-type">
+                <span>{{ labelOfTransaction(tx) }}</span>
+                <ReimbursableTransactionBadge :tx="tx" />
+              </div>
               <div class="tx-meta-row">
                   <small class="muted">{{ timeNoteText(tx) }}</small>
               </div>
@@ -286,7 +288,7 @@ import { defaultAccountIcon, normalizeFaIcon } from '@/ui/utils/fa-icon-options'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { currencyOptions, getCurrencyOption, normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
-import { reimbursableTransactionRowClass } from '@/ui/utils/reimbursable-transaction'
+import ReimbursableTransactionBadge from '@/ui/components/transactions/ReimbursableTransactionBadge.vue'
 
 const route = useRoute()
 const router = useRouter()

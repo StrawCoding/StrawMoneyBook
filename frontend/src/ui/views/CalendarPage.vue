@@ -61,7 +61,6 @@
             v-for="tx in selectedDayTransactions"
             :key="tx.id"
             class="tx-item"
-            :class="reimbursableTransactionRowClass(tx)"
             role="button"
             tabindex="0"
             @click="openTx(tx.id)"
@@ -73,6 +72,7 @@
             <div class="tx-main">
               <div class="tx-type">
                 <span>{{ txLabel(tx) }}</span>
+                <ReimbursableTransactionBadge :tx="tx" />
               </div>
               <small class="muted">{{ formatTime(tx.occurred_at) }}</small>
             </div>
@@ -116,7 +116,7 @@ import { addonDeltaMajorFromNote, addonDeltaTagText } from '@/ui/utils/addon-not
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { monthKeyFromDate, dateKeyFromDate } from '@/core/utils/id'
-import { reimbursableTransactionRowClass } from '@/ui/utils/reimbursable-transaction'
+import ReimbursableTransactionBadge from '@/ui/components/transactions/ReimbursableTransactionBadge.vue'
 
 const router = useRouter()
 const ledgerStore = useLedgerStore()
