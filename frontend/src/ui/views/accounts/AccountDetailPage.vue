@@ -210,6 +210,7 @@
               v-for="tx in group.items"
               :key="tx.id"
               class="tx-item"
+              :class="reimbursableTransactionRowClass(tx)"
               role="button"
               tabindex="0"
               @click="openEdit(tx)"
@@ -285,6 +286,7 @@ import { defaultAccountIcon, normalizeFaIcon } from '@/ui/utils/fa-icon-options'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { currencyOptions, getCurrencyOption, normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
+import { reimbursableTransactionRowClass } from '@/ui/utils/reimbursable-transaction'
 
 const route = useRoute()
 const router = useRouter()

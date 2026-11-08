@@ -61,6 +61,7 @@
             v-for="tx in selectedDayTransactions"
             :key="tx.id"
             class="tx-item"
+            :class="reimbursableTransactionRowClass(tx)"
             role="button"
             tabindex="0"
             @click="openTx(tx.id)"
@@ -115,6 +116,7 @@ import { addonDeltaMajorFromNote, addonDeltaTagText } from '@/ui/utils/addon-not
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { monthKeyFromDate, dateKeyFromDate } from '@/core/utils/id'
+import { reimbursableTransactionRowClass } from '@/ui/utils/reimbursable-transaction'
 
 const router = useRouter()
 const ledgerStore = useLedgerStore()

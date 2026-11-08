@@ -251,6 +251,27 @@ button:focus-visible,
   box-shadow: none;
 }
 
+/* 待報銷支出：略降飽和 + 標題／金額綠色（全站交易列表共用） */
+.tx-item.tx-item--reimbursable {
+  filter: saturate(0.88) brightness(0.95);
+  background: color-mix(in srgb, var(--surface-soft, rgba(140, 140, 140, 0.12)) 55%, transparent);
+}
+
+.tx-item.tx-item--reimbursable .tx-type,
+.tx-item.tx-item--reimbursable .tx-type span,
+.tx-item.tx-item--reimbursable .tx-title,
+.tx-item.tx-item--reimbursable .tx-title span {
+  color: var(--income-dark, #2fb86f);
+}
+
+.tx-item.tx-item--reimbursable .money-expense {
+  color: var(--income-dark, #2fb86f);
+}
+
+.tx-item.tx-item--reimbursable .tx-main > strong {
+  color: var(--income-dark, #2fb86f);
+}
+
 .app-shell {
   min-height: 100vh;
   max-width: var(--app-max-width);

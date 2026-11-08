@@ -52,7 +52,7 @@
           v-for="tx in filteredTransactions"
           :key="tx.id"
           class="tx-item"
-          :class="{ selectable: batchMode, selected: selectedIds.has(tx.id) }"
+          :class="[reimbursableTransactionRowClass(tx), { selectable: batchMode, selected: selectedIds.has(tx.id) }]"
           role="button"
           tabindex="0"
           @click="batchMode ? toggleSelect(tx.id) : openEdit(tx)"
@@ -177,6 +177,7 @@ import { useLoanStore } from '@/ui/stores/loan.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useTransactionSearchPage } from '@/ui/composables/useTransactionSearchPage'
+import { reimbursableTransactionRowClass } from '@/ui/utils/reimbursable-transaction'
 
 const ledgerStore = useLedgerStore()
 const categoryStore = useCategoryStore()

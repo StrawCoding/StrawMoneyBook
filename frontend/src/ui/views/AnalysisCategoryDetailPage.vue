@@ -41,6 +41,7 @@
               v-for="tx in group.items"
               :key="tx.id"
               class="tx-item"
+              :class="reimbursableTransactionRowClass(tx)"
               role="button"
               tabindex="0"
               @click="openTransaction(tx)"
@@ -86,6 +87,7 @@ import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { monthKeyFromDate } from '@/core/utils/id'
 import { projectAnalysisCategoryTransactions } from '@/core/utils/analysis-breakdown'
+import { reimbursableTransactionRowClass } from '@/ui/utils/reimbursable-transaction'
 
 const route = useRoute()
 const router = useRouter()

@@ -165,6 +165,7 @@
           v-for="tx in selectedDayTransactions"
           :key="tx.id"
           class="tx-item"
+          :class="reimbursableTransactionRowClass(tx)"
           role="button"
           tabindex="0"
           :data-testid="`budget-day-tx-${tx.id}`"
@@ -282,6 +283,7 @@ import {
 } from '@/core/services/budget.service'
 import { listTransactionsForCalendarMonth } from '@/core/services/transaction-query.service'
 import { defaultCategoryExpenseIcon, normalizeFaIcon } from '@/ui/utils/fa-icon-options'
+import { reimbursableTransactionRowClass } from '@/ui/utils/reimbursable-transaction'
 
 const router = useRouter()
 const budgetStore = useBudgetStore()
