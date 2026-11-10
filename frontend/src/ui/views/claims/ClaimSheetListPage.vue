@@ -185,6 +185,7 @@ import {
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import {
   buildClaimSheetImportedClaimItem,
+  buildClaimSheetImportedDraftTx,
   claimSheetImportKindFromClaimItem,
   claimSheetImportedMaxAmountMinor,
   resolveImportedTxAmountMinor,
@@ -218,6 +219,8 @@ const dashboard = ref({
 const createSheetBootstrapReady = ref(false)
 const importableTxs = ref([])
 const importableBorrowLoanTxs = ref([])
+/** Persisted claim rows while editing in the create sheet (for import preview when tx left pending pool). */
+const editingClaimItems = ref([])
 const isCreateOpen = ref(false)
 const createDraftSection = ref('manual')
 const editingManualItemId = ref('')
@@ -267,14 +270,72 @@ const visibleClaimEmptyKey = computed(() => {
   return activeClaimPage.value === 'completed' ? 'claim_sheet.empty_completed' : 'claim_sheet.empty'
 })
 
+const reimbursementClaimItems = computed(() => {
+  return editingClaimItems.value.filter((item) => {
+    if (!String(item?.transaction_id ?? '').trim()) return false
+    return claimSheetImportKindFromClaimItem(item) === 'reimbursement'
+  })
+})
+
+const borrowLoanClaimItems = computed(() => {
+  return editingClaimItems.value.filter((item) => {
+    if (!String(item?.transaction_id ?? '').trim()) return false
+    return claimSheetImportKindFromClaimItem(item) === 'borrow_loan'
+  })
+})
+
+const selectedImportedDraftItems = computed(() => {
+  return reimbursementClaimItems.value.map((item) => buildClaimSheetImportedDraftTx(item))
+})
+
+const selectedBorrowLoanDraftItems = computed(() => {
+  return borrowLoanClaimItems.value.map((item) => buildClaimSheetImportedDraftTx(item))
+})
+
+const editableImportedTxs = computed(() => {
+  const txMap = new Map()
+
+  for (const tx of importableTxs.value) {
+    const txId = String(tx?.id ?? '').trim()
+    if (!txId) continue
+    txMap.set(txId, tx)
+  }
+
+  for (const tx of selectedImportedDraftItems.value) {
+    const txId = String(tx?.id ?? '').trim()
+    if (!txId || txMap.has(txId)) continue
+    txMap.set(txId, tx)
+  }
+
+  return Array.from(txMap.values())
+})
+
+const editableBorrowLoanTxs = computed(() => {
+  const txMap = new Map()
+
+  for (const tx of importableBorrowLoanTxs.value) {
+    const txId = String(tx?.id ?? '').trim()
+    if (!txId) continue
+    txMap.set(txId, tx)
+  }
+
+  for (const tx of selectedBorrowLoanDraftItems.value) {
+    const txId = String(tx?.id ?? '').trim()
+    if (!txId || txMap.has(txId)) continue
+    txMap.set(txId, tx)
+  }
+
+  return Array.from(txMap.values())
+})
+
 const importedItems = computed(() => {
   const idSet = new Set(createForm.importTxIds.map((id) => String(id ?? '').trim()).filter(Boolean))
-  return importableTxs.value.filter((tx) => idSet.has(String(tx.id)))
+  return editableImportedTxs.value.filter((tx) => idSet.has(String(tx.id)))
 })
 
 const importedBorrowLoanItems = computed(() => {
   const idSet = new Set(createForm.borrowLoanImportTxIds.map((id) => String(id ?? '').trim()).filter(Boolean))
-  return importableBorrowLoanTxs.value.filter((tx) => idSet.has(String(tx.id)))
+  return editableBorrowLoanTxs.value.filter((tx) => idSet.has(String(tx.id)))
 })
 
 const draftTotalMinor = computed(() => {
@@ -432,6 +493,7 @@ function resetCreateForm() {
   createForm.importAmountOverrides = {}
   createForm.borrowLoanImportAmountOverrides = {}
   createForm.manualItems = []
+  editingClaimItems.value = []
   createDraftSection.value = 'manual'
   editingManualItemId.value = ''
 }
@@ -749,6 +811,7 @@ function buildImportedBorrowLoanClaimItems() {
 
 function fillCreateFormFromDetail(detail) {
   resetCreateForm()
+  editingClaimItems.value = Array.isArray(detail?.items) ? detail.items : []
   createForm.editingClaimId = String(detail?.claim?.id ?? '')
   createForm.title = String(detail?.claim?.title ?? '')
   createForm.counterpartyName = String(detail?.claim?.counterparty_name ?? '')
@@ -798,6 +861,14 @@ function fillCreateFormFromDetail(detail) {
         amountMajor: Math.max(0, Math.round(Number(item?.amount_minor ?? 0))) / 100,
       }
     })
+
+  if (createForm.importTxIds.length) {
+    createDraftSection.value = 'reimburse'
+  } else if (createForm.borrowLoanImportTxIds.length) {
+    createDraftSection.value = 'borrow'
+  } else if (createForm.manualItems.some((item) => Number(item.amountMajor ?? 0) > 0)) {
+    createDraftSection.value = 'manual'
+  }
 }
 
 async function openEditSheetById(claimId) {

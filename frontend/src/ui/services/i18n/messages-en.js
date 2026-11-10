@@ -1717,6 +1717,7 @@ export const MESSAGES_EN = {
     'claim_sheet.form.payment_amount': 'This payment',
     'claim_sheet.payments_title': 'Payment History',
     'claim_sheet.payments_empty': 'No payments yet',
+    'claim_sheet.items_empty': 'No line items yet',
     'claim_sheet.status.collecting': 'Collecting',
     'claim_sheet.item_settled': 'Written back {amount}',
     'claim_sheet.toast.recorded': 'Payment recorded',

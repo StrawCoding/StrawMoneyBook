@@ -76,6 +76,7 @@
       </header>
 
       <ul class="detail-list">
+        <li v-if="!items.length" class="muted">{{ t('claim_sheet.items_empty') }}</li>
         <li v-for="item in items" :key="item.id" class="detail-item">
           <div class="row detail-item-head">
             <div class="detail-item-title">

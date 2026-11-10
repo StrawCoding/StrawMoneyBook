@@ -19,6 +19,11 @@ const claimEditSource = readFileSync(
   'utf8',
 )
 
+const claimDetailSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/views/claims/ClaimSheetDetailPage.vue'),
+  'utf8',
+)
+
 const claimImportSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/claims/ClaimSheetImportPage.vue'),
   'utf8',
@@ -73,6 +78,13 @@ test('claim forms use an import button instead of inline reimbursement checkboxe
   assert.match(claimEditSource, /claim_sheet\.import\.open/)
   assert.doesNotMatch(claimListSource, /v-for="tx in reimbursementStore\.pendingItems"[\s\S]*v-model="createForm\.importTxIds"/)
   assert.doesNotMatch(claimEditSource, /v-for="tx in editableImportedTxs"[\s\S]*v-model="form\.importTxIds"/)
+})
+
+test('claim list edit sheet merges saved import rows into editable import preview', () => {
+  assert.match(claimListSource, /editingClaimItems/)
+  assert.match(claimListSource, /buildClaimSheetImportedDraftTx/)
+  assert.match(claimListSource, /const editableImportedTxs = computed/)
+  assert.match(claimDetailSource, /claim_sheet\.items_empty/)
 })
 
 test('new claim import flow preserves draft form state while visiting the import page', () => {

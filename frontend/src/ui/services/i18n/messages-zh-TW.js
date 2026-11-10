@@ -1713,6 +1713,7 @@ export const MESSAGES_ZH_TW = {
     'claim_sheet.form.payment_amount': '本次入帳金額',
     'claim_sheet.payments_title': '入帳紀錄',
     'claim_sheet.payments_empty': '尚未入帳',
+    'claim_sheet.items_empty': '尚未加入項目',
     'claim_sheet.status.collecting': '收款中',
     'claim_sheet.item_settled': '已回寫 {amount}',
     'claim_sheet.toast.recorded': '已入帳',

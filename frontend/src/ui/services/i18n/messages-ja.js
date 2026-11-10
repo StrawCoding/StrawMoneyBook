@@ -661,6 +661,7 @@ export const MESSAGES_JA = {
   'claim_sheet.form.payment_amount': '今回の入金額',
   'claim_sheet.payments_title': '入金履歴',
   'claim_sheet.payments_empty': 'まだ入金がありません',
+  'claim_sheet.items_empty': '項目がまだありません',
   'claim_sheet.status.collecting': '入金中',
   'claim_sheet.item_settled': '反映済み {amount}',
   'claim_sheet.toast.recorded': '入金しました',
