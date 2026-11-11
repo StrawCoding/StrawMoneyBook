@@ -31,3 +31,11 @@ test('claim sheet surfaces the counterparty in list and detail flows', () => {
   assert.match(claimDetailSource, /v-if="claim\.counterparty_name"/)
   assert.match(paymentSheetSource, /v-if="targetClaim\.counterparty_name"/)
 })
+
+test('claim sheet list imports isClaimCollecting for status labels', () => {
+  assert.match(claimSheetSource, /isClaimCollecting\(claim\)/)
+  assert.match(
+    claimSheetSource,
+    /from '@\/core\/utils\/claim-sheet-payment'[\s\S]*isClaimCollecting/,
+  )
+})

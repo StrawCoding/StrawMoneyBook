@@ -200,6 +200,7 @@ import {
 import {
   claimPaidMinorOf,
   claimRemainingMinor,
+  isClaimCollecting,
   isClaimDraftEditable,
   isClaimFullyPaid,
 } from '@/core/utils/claim-sheet-payment'
