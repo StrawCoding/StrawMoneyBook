@@ -1088,6 +1088,33 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
 }
 
+/* 請款單列表：modern 卡片化；避免 motion-list 在 WebView 卡在 opacity 0 */
+[data-ui-layout='modern'] [data-testid='claim-sheet-list-view'] .claim-list {
+  display: grid;
+  gap: 10px;
+}
+
+[data-ui-layout='modern'] [data-testid='claim-sheet-list-view'] .claim-item {
+  border: 1px solid var(--border);
+  border-radius: var(--habitat-radius-tile, 12px);
+  background: var(--card);
+  padding: 12px;
+  min-width: 0;
+}
+
+[data-testid='claim-sheet-list-view'] .claim-list .claim-item,
+[data-testid='claim-sheet-list-view'] .claim-list .motion-list-enter-from,
+[data-testid='claim-sheet-list-view'] .claim-list .motion-list-enter-active,
+[data-testid='claim-sheet-list-view'] .claim-list .motion-list-leave-to,
+[data-testid='claim-sheet-list-view'] .claim-list .motion-list-leave-active {
+  opacity: 1;
+  transform: none;
+}
+
+[data-testid='claim-sheet-list-view'] .claim-list .motion-list-leave-active {
+  position: relative;
+}
+
 [data-ui-layout='modern'] [data-testid='calendar-view'] .tx-item {
   border: 0;
   border-radius: 0;
