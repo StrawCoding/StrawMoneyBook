@@ -2,6 +2,9 @@
 
 ---
 
+## v1.6.45
+- 請款單列表：移除 TransitionGroup，修正 WebView 下列項完全不顯示；列表樣式改由全域 habitat-ui 套用。
+
 ## v1.6.43
 - 請款單列表（現代版型）：修正進行中筆數有顯示但列表空白；modern 卡片樣式；避免 motion-list 在 WebView 卡在透明。
 

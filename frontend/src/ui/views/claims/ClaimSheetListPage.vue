@@ -48,7 +48,7 @@
         </button>
       </div>
 
-      <TransitionGroup name="motion-list" tag="ul" class="claim-list">
+      <ul class="claim-list" data-testid="claim-sheet-list">
         <li v-for="claim in visibleClaims" :key="claim.id" class="claim-item">
           <div class="row claim-row">
             <button type="button" class="claim-link" @click="openClaimDetail(claim)">
@@ -84,7 +84,7 @@
             </button>
           </div>
         </li>
-      </TransitionGroup>
+      </ul>
       <p v-if="!visibleClaims.length" class="muted claim-list-empty">{{ t(visibleClaimEmptyKey) }}</p>
     </section>
 
@@ -151,7 +151,7 @@
 
 <script setup>
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
-import { computed, onMounted, reactive, ref, TransitionGroup, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import ClaimSheetDraftForm from '@/ui/components/claims/ClaimSheetDraftForm.vue'

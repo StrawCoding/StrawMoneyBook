@@ -25,7 +25,7 @@ test('BottomNav active tab pop animation', () => {
   assert.match(nav, /animation: nav-tab-pop/)
 })
 
-test('claim and reimbursement lists use motion-list TransitionGroup', () => {
+test('claim list uses static ul; reimbursement keeps motion-list TransitionGroup', () => {
   const claim = readFileSync(
     resolve(import.meta.dirname, '../src/ui/views/claims/ClaimSheetListPage.vue'),
     'utf8',
@@ -34,7 +34,8 @@ test('claim and reimbursement lists use motion-list TransitionGroup', () => {
     resolve(import.meta.dirname, '../src/ui/views/reimbursements/ReimbursementListPage.vue'),
     'utf8',
   )
-  assert.match(claim, /TransitionGroup name="motion-list"/)
+  assert.match(claim, /data-testid="claim-sheet-list"/)
+  assert.doesNotMatch(claim, /TransitionGroup name="motion-list"/)
   assert.match(reimb, /TransitionGroup name="motion-list"/)
 })
 
