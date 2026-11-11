@@ -3,6 +3,7 @@
     :title="t('claim_sheet.list_title')"
     :kicker="t('claim_sheet.habitat_hello')"
     test-id="claim-sheet-list-view"
+    root-class="claim-sheet-list-page"
     back-to="/features"
   >
 

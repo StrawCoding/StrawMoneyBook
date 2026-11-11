@@ -1221,4 +1221,14 @@ a,
     animation: none !important;
     transition-duration: 0ms !important;
   }
+
+  /* animation-fill-mode: both 在關閉動畫時仍可能卡在 opacity 0 */
+  .stack > *,
+  .row,
+  .picker-row,
+  .period-tabs,
+  .ledger-switcher-wrap {
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }

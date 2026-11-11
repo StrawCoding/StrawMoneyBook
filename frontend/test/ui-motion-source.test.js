@@ -9,6 +9,7 @@ const read = (rel) => readFileSync(resolve(uiRoot, rel), 'utf8')
 test('global motion-list and nested sheet overlay tokens exist', () => {
   const globalCss = readFileSync(resolve(import.meta.dirname, '../src/ui/assets/css/global.css'), 'utf8')
   assert.match(globalCss, /\.motion-list-enter-from/)
+  assert.match(globalCss, /prefers-reduced-motion: reduce[\s\S]*\.stack > \*/)
   assert.match(globalCss, /\.app-overlay-sheet-mask-nested/)
   assert.match(globalCss, /scale\(0\.97\)/)
   assert.match(globalCss, /\.app-overlay-sheet-card/)
@@ -23,6 +24,18 @@ test('BottomNav active tab pop animation', () => {
   const nav = read('components/layout/BottomNav.vue')
   assert.match(nav, /nav-tab-pop/)
   assert.match(nav, /animation: nav-tab-pop/)
+})
+
+test('claim list habitat stack disables move-in stuck transparent state', () => {
+  const habitatCss = readFileSync(resolve(import.meta.dirname, '../src/ui/assets/css/habitat-ui.css'), 'utf8')
+  assert.match(habitatCss, /\[data-testid='claim-sheet-list-view'\] \.habitat-stack > \*/)
+  assert.match(habitatCss, /opacity: 1 !important/)
+
+  const claim = readFileSync(
+    resolve(import.meta.dirname, '../src/ui/views/claims/ClaimSheetListPage.vue'),
+    'utf8',
+  )
+  assert.match(claim, /root-class="claim-sheet-list-page"/)
 })
 
 test('claim list uses static ul; reimbursement keeps motion-list TransitionGroup', () => {

@@ -2,6 +2,9 @@
 
 ---
 
+## v1.6.46
+- 請款單列表：強制取消 habitat stack 進場透明狀態；列表改 flex 版面；減少動態模式下 stack 區塊可見性保險。
+
 ## v1.6.45
 - 請款單列表：移除 TransitionGroup，修正 WebView 下列項完全不顯示；列表樣式改由全域 habitat-ui 套用。
 
